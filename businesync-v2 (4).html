@@ -175,6 +175,7 @@ tr.row-checked:hover { background: rgba(255,90,90,.11); }
     <button class="nb" onclick="sw('sales')">💰 売上</button>
     <button class="nb" onclick="sw('inventory')">📦 商品</button>
     <button class="nb" onclick="sw('profit')">📈 損益</button>
+    <button class="nb" onclick="sw('photo')">🖼️ 写真合成</button>
   </nav>
   <div class="storage-info">
     <div class="storage-dot" id="storage-dot"></div>
@@ -595,6 +596,59 @@ tr.row-checked:hover { background: rgba(255,90,90,.11); }
   </div>
 </div>
 
+<!-- ════ PHOTO COMBINE ════ -->
+<div id="v-photo" class="view">
+  <div class="panel" style="margin-bottom:14px">
+    <div class="ph"><span class="pt">🖼️ 写真合成 — 4枚 → 1枚（2×2グリッド）</span></div>
+    <div class="pb">
+      <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:14px">
+        <label style="font-size:12px;color:var(--t2)">余白
+          <input type="range" id="pc-gap" min="0" max="40" value="6" oninput="document.getElementById('pc-gap-v').textContent=this.value+'px';renderPhotoPreview()" style="vertical-align:middle;width:100px;accent-color:var(--g)">
+          <span id="pc-gap-v" style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--g);min-width:30px;display:inline-block">6px</span>
+        </label>
+        <label style="font-size:12px;color:var(--t2)">背景色
+          <input type="color" id="pc-bg" value="#ffffff" oninput="renderPhotoPreview()" style="margin-left:4px;width:32px;height:22px;border:1px solid var(--bd);border-radius:4px;cursor:pointer;background:none">
+        </label>
+        <label style="font-size:12px;color:var(--t2)">出力サイズ
+          <select id="pc-size" onchange="renderPhotoPreview()" class="sbox" style="max-width:130px;font-size:12px;padding:4px 8px">
+            <option value="1600">1600px</option>
+            <option value="2000" selected>2000px</option>
+            <option value="2400">2400px</option>
+            <option value="3000">3000px</option>
+          </select>
+        </label>
+        <label style="font-size:12px;color:var(--t2)">品質
+          <select id="pc-fmt" onchange="renderPhotoPreview()" class="sbox" style="max-width:100px;font-size:12px;padding:4px 8px">
+            <option value="jpeg">JPEG</option>
+            <option value="png">PNG</option>
+            <option value="webp">WebP</option>
+          </select>
+        </label>
+      </div>
+
+      <!-- Upload slots 2x2 -->
+      <div id="pc-slots" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;max-width:600px;margin-bottom:16px">
+        <!-- slots injected by JS -->
+      </div>
+
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <button class="btn btn-g" onclick="combinePhotos()">⬇️ ダウンロード</button>
+        <button class="btn btn-o" onclick="clearPhotoSlots()">🗑️ クリア</button>
+        <span id="pc-status" style="font-size:12px;color:var(--t3)"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Preview -->
+  <div class="panel">
+    <div class="ph"><span class="pt">プレビュー</span></div>
+    <div class="pb" style="display:flex;justify-content:center;align-items:flex-start;min-height:200px">
+      <canvas id="pc-canvas" style="max-width:100%;border-radius:6px;display:none"></canvas>
+      <p id="pc-placeholder" style="color:var(--t3);font-size:13px;margin-top:40px">画像をアップロードするとプレビューが表示されます</p>
+    </div>
+  </div>
+</div>
+
 <!-- ════ CONFIRM MODAL ════ -->
 <div class="overlay" id="m-confirm">
   <div class="modal" style="max-width:360px;text-align:center">
@@ -761,10 +815,10 @@ function sw(v) {
   document.querySelectorAll('.view').forEach(e => e.classList.remove('on'));
   document.querySelectorAll('.nb').forEach(e => e.classList.remove('on'));
   document.getElementById('v-' + v).classList.add('on');
-  ['dash','purchase','sales','inventory','profit'].forEach((x, i) => {
+  ['dash','purchase','sales','inventory','profit','photo'].forEach((x, i) => {
     if (x === v) document.querySelectorAll('.nb')[i].classList.add('on');
   });
-  const fn = { dash: renderDash, purchase: renderPur, sales: renderSal, inventory: renderInv, profit: renderProfit }[v];
+  const fn = { dash: renderDash, purchase: renderPur, sales: renderSal, inventory: renderInv, profit: renderProfit, photo: initPhotoView }[v];
   if (fn) Promise.resolve(fn()).catch(e => console.warn('render error:', e));
 }
 
@@ -3245,6 +3299,143 @@ async function refreshRate() {
 
 updateStorageInfo();
 fetchEurJpy().then(() => renderDash()).catch(e => { console.warn(e); renderDash(); });
+
+// ══════════════════════════════════════
+//  PHOTO COMBINATION
+// ══════════════════════════════════════
+const PC_COUNT = 4;
+let pcImages = [null, null, null, null]; // HTMLImageElement or null per slot
+
+function initPhotoView() {
+  const container = document.getElementById('pc-slots');
+  if (container.children.length === PC_COUNT) return; // already built
+  container.innerHTML = '';
+  for (let i = 0; i < PC_COUNT; i++) {
+    const slot = document.createElement('div');
+    slot.id = `pc-slot-${i}`;
+    slot.style.cssText = 'border:2px dashed var(--bd2);border-radius:8px;aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;position:relative;overflow:hidden;background:var(--s2);transition:border-color .15s';
+    slot.innerHTML = `
+      <input type="file" accept="image/*" style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%" onchange="pcLoadFile(${i},this)">
+      <img id="pc-thumb-${i}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none;pointer-events:none">
+      <div id="pc-label-${i}" style="pointer-events:none;text-align:center">
+        <div style="font-size:22px;margin-bottom:6px">＋</div>
+        <div style="font-size:11px;color:var(--t3)">写真 ${i+1}</div>
+      </div>
+      <button onclick="pcRemove(${i},event)" id="pc-rm-${i}" style="display:none;position:absolute;top:4px;right:4px;background:rgba(0,0,0,.55);border:none;border-radius:50%;width:20px;height:20px;cursor:pointer;color:#fff;font-size:11px;line-height:1;z-index:2">✕</button>
+    `;
+    slot.addEventListener('dragover', e => { e.preventDefault(); slot.style.borderColor = 'var(--g)'; });
+    slot.addEventListener('dragleave', () => { slot.style.borderColor = 'var(--bd2)'; });
+    slot.addEventListener('drop', e => { e.preventDefault(); slot.style.borderColor = 'var(--bd2)'; const f = e.dataTransfer.files[0]; if (f) pcLoadBlob(i, f); });
+    container.appendChild(slot);
+  }
+}
+
+function pcLoadFile(idx, input) {
+  if (input.files[0]) pcLoadBlob(idx, input.files[0]);
+}
+
+function pcLoadBlob(idx, file) {
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => {
+    pcImages[idx] = img;
+    const thumb = document.getElementById(`pc-thumb-${idx}`);
+    const label = document.getElementById(`pc-label-${idx}`);
+    const rm    = document.getElementById(`pc-rm-${idx}`);
+    thumb.src = url; thumb.style.display = 'block';
+    label.style.display = 'none';
+    rm.style.display = 'block';
+    renderPhotoPreview();
+  };
+  img.src = url;
+}
+
+function pcRemove(idx, e) {
+  e.stopPropagation();
+  pcImages[idx] = null;
+  const thumb = document.getElementById(`pc-thumb-${idx}`);
+  const label = document.getElementById(`pc-label-${idx}`);
+  const rm    = document.getElementById(`pc-rm-${idx}`);
+  thumb.src = ''; thumb.style.display = 'none';
+  label.style.display = 'flex';
+  rm.style.display = 'none';
+  renderPhotoPreview();
+}
+
+function clearPhotoSlots() {
+  for (let i = 0; i < PC_COUNT; i++) pcRemove(i, { stopPropagation: () => {} });
+  document.getElementById('pc-canvas').style.display = 'none';
+  document.getElementById('pc-placeholder').style.display = 'block';
+  document.getElementById('pc-status').textContent = '';
+}
+
+function buildCanvas(size, gap, bgColor) {
+  const canvas = document.createElement('canvas');
+  canvas.width = size; canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = bgColor;
+  ctx.fillRect(0, 0, size, size);
+  const cell = (size - gap * 3) / 2;
+  const positions = [
+    [gap,        gap],
+    [gap*2+cell, gap],
+    [gap,        gap*2+cell],
+    [gap*2+cell, gap*2+cell],
+  ];
+  for (let i = 0; i < PC_COUNT; i++) {
+    if (!pcImages[i]) continue;
+    const [x, y] = positions[i];
+    const img = pcImages[i];
+    const s = Math.min(img.width, img.height);
+    const sx = (img.width  - s) / 2;
+    const sy = (img.height - s) / 2;
+    ctx.drawImage(img, sx, sy, s, s, x, y, cell, cell);
+  }
+  return canvas;
+}
+
+function renderPhotoPreview() {
+  const loaded = pcImages.filter(Boolean).length;
+  const placeholder = document.getElementById('pc-placeholder');
+  const previewCanvas = document.getElementById('pc-canvas');
+  document.getElementById('pc-status').textContent = `${loaded}/4 枚`;
+
+  if (loaded === 0) {
+    previewCanvas.style.display = 'none';
+    placeholder.style.display = 'block';
+    return;
+  }
+
+  const gap    = parseInt(document.getElementById('pc-gap').value);
+  const bgColor = document.getElementById('pc-bg').value;
+  const previewSize = 600;
+  const canvas = buildCanvas(previewSize, Math.round(gap * previewSize / parseInt(document.getElementById('pc-size').value)), bgColor);
+
+  previewCanvas.width  = canvas.width;
+  previewCanvas.height = canvas.height;
+  previewCanvas.getContext('2d').drawImage(canvas, 0, 0);
+  previewCanvas.style.display = 'block';
+  placeholder.style.display = 'none';
+}
+
+function combinePhotos() {
+  const loaded = pcImages.filter(Boolean).length;
+  if (loaded === 0) { toast('画像を1枚以上アップロードしてください', 'var(--yel)'); return; }
+  const gap     = parseInt(document.getElementById('pc-gap').value);
+  const bgColor = document.getElementById('pc-bg').value;
+  const size    = parseInt(document.getElementById('pc-size').value);
+  const fmt     = document.getElementById('pc-fmt').value;
+  const canvas  = buildCanvas(size, gap, bgColor);
+  const quality = fmt === 'png' ? undefined : 0.92;
+  const mimeMap = { jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp' };
+  canvas.toBlob(blob => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `combined_${Date.now()}.${fmt}`;
+    a.click();
+    toast('ダウンロード開始しました');
+  }, mimeMap[fmt], quality);
+}
 </script>
 </body>
 </html>
