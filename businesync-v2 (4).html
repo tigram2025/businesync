@@ -626,6 +626,16 @@ tr.row-checked:hover { background: rgba(255,90,90,.11); }
         </label>
       </div>
 
+      <!-- まとめてドロップエリア -->
+      <div id="pc-bulk-drop" style="border:2px dashed var(--bd2);border-radius:10px;padding:18px 16px;text-align:center;cursor:pointer;position:relative;margin-bottom:12px;max-width:600px;transition:all .2s;background:var(--s2)">
+        <input type="file" accept="image/*" multiple style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%" onchange="pcBulkLoad(this.files)">
+        <div style="pointer-events:none">
+          <div style="font-size:22px;margin-bottom:4px">📂</div>
+          <div style="font-size:13px;color:var(--t2);font-weight:500">ここに4枚まとめてドロップ</div>
+          <div style="font-size:11px;color:var(--t3);margin-top:2px">クリックして選択もできます（複数選択可）</div>
+        </div>
+      </div>
+
       <!-- Upload slots 2x2 -->
       <div id="pc-slots" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;max-width:600px;margin-bottom:16px">
         <!-- slots injected by JS -->
@@ -3308,7 +3318,7 @@ let pcImages = [null, null, null, null]; // HTMLImageElement or null per slot
 
 function initPhotoView() {
   const container = document.getElementById('pc-slots');
-  if (container.children.length === PC_COUNT) return; // already built
+  if (container.children.length === PC_COUNT) return;
   container.innerHTML = '';
   for (let i = 0; i < PC_COUNT; i++) {
     const slot = document.createElement('div');
@@ -3328,6 +3338,30 @@ function initPhotoView() {
     slot.addEventListener('drop', e => { e.preventDefault(); slot.style.borderColor = 'var(--bd2)'; const f = e.dataTransfer.files[0]; if (f) pcLoadBlob(i, f); });
     container.appendChild(slot);
   }
+
+  // バルクドロップエリアのイベント設定
+  const bulk = document.getElementById('pc-bulk-drop');
+  if (bulk && !bulk.dataset.init) {
+    bulk.dataset.init = '1';
+    bulk.addEventListener('dragover', e => { e.preventDefault(); bulk.style.borderColor = 'var(--g)'; bulk.style.background = 'rgba(34,211,160,.06)'; });
+    bulk.addEventListener('dragleave', () => { bulk.style.borderColor = 'var(--bd2)'; bulk.style.background = 'var(--s2)'; });
+    bulk.addEventListener('drop', e => {
+      e.preventDefault();
+      bulk.style.borderColor = 'var(--bd2)'; bulk.style.background = 'var(--s2)';
+      pcBulkLoad(e.dataTransfer.files);
+    });
+  }
+}
+
+function pcBulkLoad(files) {
+  const imgs = Array.from(files).filter(f => f.type.startsWith('image/')).slice(0, PC_COUNT);
+  let slot = 0;
+  imgs.forEach(file => {
+    while (slot < PC_COUNT && pcImages[slot]) slot++;
+    if (slot >= PC_COUNT) slot = 0; // 全スロット埋まっていれば先頭から上書き
+    pcLoadBlob(slot, file);
+    slot++;
+  });
 }
 
 function pcLoadFile(idx, input) {
