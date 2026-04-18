@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>写真合成 — 4枚→1枚</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Hiragino Sans','Noto Sans JP',sans-serif;background:#0f0f14;color:#e8e8f0;min-height:100vh;padding:20px}
+h1{font-size:16px;font-weight:600;color:#22d3a0;margin-bottom:20px;letter-spacing:.5px}
+
+.card{background:#18181f;border:1px solid #28283a;border-radius:12px;padding:20px;margin-bottom:16px}
+
+/* Bulk drop */
+#bulk-drop{border:2px dashed #35354a;border-radius:10px;padding:22px;text-align:center;cursor:pointer;position:relative;background:#111118;transition:all .2s;margin-bottom:14px}
+#bulk-drop.over{border-color:#22d3a0;background:rgba(34,211,160,.06)}
+#bulk-drop input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+#bulk-drop .icon{font-size:28px;margin-bottom:6px}
+#bulk-drop .title{font-size:14px;color:#c0c0d8;font-weight:500}
+#bulk-drop .sub{font-size:11px;color:#55556a;margin-top:4px}
+
+/* 2x2 slots */
+#slots{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
+.slot{border:2px dashed #35354a;border-radius:8px;aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;position:relative;overflow:hidden;background:#111118;transition:border-color .15s}
+.slot.over{border-color:#22d3a0}
+.slot input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.slot img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none;pointer-events:none}
+.slot .lbl{pointer-events:none;text-align:center}
+.slot .lbl .plus{font-size:24px;color:#35354a}
+.slot .lbl .num{font-size:11px;color:#55556a;margin-top:4px}
+.slot .rm{display:none;position:absolute;top:5px;right:5px;background:rgba(0,0,0,.6);border:none;border-radius:50%;width:22px;height:22px;cursor:pointer;color:#fff;font-size:12px;z-index:2;line-height:22px;text-align:center}
+.slot .rm:hover{background:rgba(240,90,90,.8)}
+
+/* Controls */
+.controls{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:16px}
+.ctrl-item{display:flex;flex-direction:column;gap:4px}
+.ctrl-item label{font-size:11px;color:#9090b0}
+.ctrl-item input[type=range]{width:110px;accent-color:#22d3a0;vertical-align:middle}
+.ctrl-item select,.ctrl-item input[type=color]{background:#111118;border:1px solid #28283a;border-radius:6px;color:#e8e8f0;font-size:12px;padding:5px 8px;cursor:pointer}
+.ctrl-item input[type=color]{width:38px;height:30px;padding:2px 4px}
+.val{font-size:11px;color:#22d3a0;font-family:monospace;min-width:32px;display:inline-block}
+
+/* Buttons */
+.actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.btn{padding:9px 18px;border-radius:8px;border:none;cursor:pointer;font-size:13px;font-weight:500;transition:all .15s}
+.btn-g{background:#22d3a0;color:#000}.btn-g:hover{background:#2fffc0}
+.btn-o{background:#202028;color:#9090b0;border:1px solid #28283a}.btn-o:hover{color:#e8e8f0}
+#status{font-size:12px;color:#55556a}
+
+/* Preview */
+#preview-wrap{display:flex;justify-content:center;min-height:160px;align-items:center}
+#canvas{max-width:100%;border-radius:8px;display:none}
+#ph{color:#55556a;font-size:13px}
+
+/* Toast */
+#toast{position:fixed;bottom:24px;right:24px;background:#18181f;border:1px solid #22d3a0;color:#22d3a0;border-radius:8px;padding:10px 16px;font-size:13px;opacity:0;transition:opacity .3s;pointer-events:none}
+#toast.on{opacity:1}
+</style>
+</head>
+<body>
+
+<h1>🖼️ 写真合成 — 4枚 → 1枚（2×2）</h1>
+
+<div class="card">
+  <!-- Bulk drop -->
+  <div id="bulk-drop">
+    <input type="file" accept="image/*" multiple onchange="bulkLoad(this.files)">
+    <div class="icon">📂</div>
+    <div class="title">ここに最大4枚まとめてドロップ</div>
+    <div class="sub">クリックしてファイル選択も可（複数選択OK）</div>
+  </div>
+
+  <!-- 2x2 slots -->
+  <div id="slots"></div>
+
+  <!-- Controls -->
+  <div class="controls">
+    <div class="ctrl-item">
+      <label>余白</label>
+      <div>
+        <input type="range" id="gap" min="0" max="40" value="6" oninput="document.getElementById('gap-v').textContent=this.value+'px';preview()">
+        <span class="val" id="gap-v">6px</span>
+      </div>
+    </div>
+    <div class="ctrl-item">
+      <label>背景色</label>
+      <input type="color" id="bg" value="#ffffff" oninput="preview()">
+    </div>
+    <div class="ctrl-item">
+      <label>出力サイズ</label>
+      <select id="size" onchange="preview()">
+        <option value="1600">1600px</option>
+        <option value="2000" selected>2000px</option>
+        <option value="2400">2400px</option>
+        <option value="3000">3000px</option>
+      </select>
+    </div>
+    <div class="ctrl-item">
+      <label>形式</label>
+      <select id="fmt">
+        <option value="jpeg">JPEG</option>
+        <option value="png">PNG</option>
+        <option value="webp">WebP</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="actions">
+    <button class="btn btn-g" onclick="download()">⬇️ ダウンロード</button>
+    <button class="btn btn-o" onclick="clearAll()">🗑️ クリア</button>
+    <span id="status"></span>
+  </div>
+</div>
+
+<div class="card">
+  <div style="font-size:12px;color:#9090b0;margin-bottom:12px">プレビュー</div>
+  <div id="preview-wrap">
+    <canvas id="canvas"></canvas>
+    <p id="ph">画像をアップロードするとプレビューが表示されます</p>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const N = 4;
+let imgs = [null, null, null, null];
+
+// Build slots
+const slotsEl = document.getElementById('slots');
+for (let i = 0; i < N; i++) {
+  const s = document.createElement('div');
+  s.className = 'slot'; s.id = `s${i}`;
+  s.innerHTML = `
+    <input type="file" accept="image/*" onchange="slotLoad(${i},this)">
+    <img id="th${i}">
+    <div class="lbl"><div class="plus">＋</div><div class="num">写真 ${i+1}</div></div>
+    <button class="rm" id="rm${i}" onclick="remove(${i},event)">✕</button>
+  `;
+  s.addEventListener('dragover', e => { e.preventDefault(); s.classList.add('over'); });
+  s.addEventListener('dragleave', () => s.classList.remove('over'));
+  s.addEventListener('drop', e => { e.preventDefault(); s.classList.remove('over'); const f = e.dataTransfer.files[0]; if (f && f.type.startsWith('image/')) loadBlob(i, f); });
+  slotsEl.appendChild(s);
+}
+
+// Bulk drop
+const bulk = document.getElementById('bulk-drop');
+bulk.addEventListener('dragover', e => { e.preventDefault(); bulk.classList.add('over'); });
+bulk.addEventListener('dragleave', () => bulk.classList.remove('over'));
+bulk.addEventListener('drop', e => { e.preventDefault(); bulk.classList.remove('over'); bulkLoad(e.dataTransfer.files); });
+
+function bulkLoad(files) {
+  const list = Array.from(files).filter(f => f.type.startsWith('image/')).slice(0, N);
+  let slot = 0;
+  list.forEach(f => {
+    while (slot < N && imgs[slot]) slot++;
+    if (slot >= N) slot = 0;
+    loadBlob(slot++, f);
+  });
+}
+
+function slotLoad(i, inp) { if (inp.files[0]) loadBlob(i, inp.files[0]); }
+
+function loadBlob(i, file) {
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => {
+    imgs[i] = img;
+    document.getElementById(`th${i}`).src = url;
+    document.getElementById(`th${i}`).style.display = 'block';
+    document.getElementById(`s${i}`).querySelector('.lbl').style.display = 'none';
+    document.getElementById(`rm${i}`).style.display = 'block';
+    preview();
+  };
+  img.src = url;
+}
+
+function remove(i, e) {
+  e.stopPropagation();
+  imgs[i] = null;
+  const th = document.getElementById(`th${i}`);
+  th.src = ''; th.style.display = 'none';
+  document.getElementById(`s${i}`).querySelector('.lbl').style.display = 'flex';
+  document.getElementById(`rm${i}`).style.display = 'none';
+  preview();
+}
+
+function clearAll() {
+  for (let i = 0; i < N; i++) remove(i, { stopPropagation: () => {} });
+  document.getElementById('canvas').style.display = 'none';
+  document.getElementById('ph').style.display = 'block';
+  document.getElementById('status').textContent = '';
+}
+
+function buildCanvas(size, gap, bg) {
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, size, size);
+  const cell = (size - gap * 3) / 2;
+  [[gap,gap],[gap*2+cell,gap],[gap,gap*2+cell],[gap*2+cell,gap*2+cell]].forEach(([x,y], i) => {
+    if (!imgs[i]) return;
+    const img = imgs[i];
+    const s = Math.min(img.width, img.height);
+    ctx.drawImage(img, (img.width-s)/2, (img.height-s)/2, s, s, x, y, cell, cell);
+  });
+  return c;
+}
+
+function preview() {
+  const loaded = imgs.filter(Boolean).length;
+  document.getElementById('status').textContent = `${loaded}/4 枚`;
+  const ph = document.getElementById('ph');
+  const cv = document.getElementById('canvas');
+  if (!loaded) { cv.style.display = 'none'; ph.style.display = 'block'; return; }
+  const gap = parseInt(document.getElementById('gap').value);
+  const bg  = document.getElementById('bg').value;
+  const out = parseInt(document.getElementById('size').value);
+  const previewGap = Math.round(gap * 600 / out);
+  const src = buildCanvas(600, previewGap, bg);
+  cv.width = src.width; cv.height = src.height;
+  cv.getContext('2d').drawImage(src, 0, 0);
+  cv.style.display = 'block'; ph.style.display = 'none';
+}
+
+function download() {
+  if (!imgs.filter(Boolean).length) { toast('画像を1枚以上アップロードしてください'); return; }
+  const gap  = parseInt(document.getElementById('gap').value);
+  const bg   = document.getElementById('bg').value;
+  const size = parseInt(document.getElementById('size').value);
+  const fmt  = document.getElementById('fmt').value;
+  const mime = { jpeg:'image/jpeg', png:'image/png', webp:'image/webp' }[fmt];
+  buildCanvas(size, gap, bg).toBlob(blob => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `combined_${Date.now()}.${fmt}`;
+    a.click();
+    toast('ダウンロード開始しました ✓');
+  }, mime, fmt === 'png' ? undefined : 0.92);
+}
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('on');
+  setTimeout(() => t.classList.remove('on'), 3000);
+}
+</script>
+</body>
+</html>
