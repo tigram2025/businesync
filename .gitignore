@@ -1,0 +1,4 @@
+__pycache__/
+*.pyc
+mercari_sales_*.csv
+debug_page*.html
