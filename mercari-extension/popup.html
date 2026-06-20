@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body {
+      width: 280px;
+      font-family: 'Hiragino Sans', 'Meiryo', sans-serif;
+      padding: 14px;
+    }
+    h3 { font-size: 0.95rem; margin-bottom: 10px; color: #e53e3e; }
+    button {
+      width: 100%;
+      padding: 10px;
+      margin-bottom: 8px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.9rem;
+    }
+    #exportBtn { background: #e53e3e; color: #fff; }
+    #debugBtn { background: #eee; color: #333; }
+    #status { font-size: 0.78rem; color: #666; margin-top: 6px; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <h3>メルカリ売上CSV出力</h3>
+  <button id="exportBtn">このページの売上をCSV出力</button>
+  <button id="debugBtn">うまくいかない時：HTMLを保存</button>
+  <div id="status"></div>
+  <script src="popup.js"></script>
+</body>
+</html>

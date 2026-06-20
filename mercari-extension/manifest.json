@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "メルカリ売上CSV出力",
+  "version": "1.0",
+  "description": "メルカリの取引履歴ページから売上データをCSVに書き出します",
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "permissions": ["activeTab", "scripting"],
+  "host_permissions": ["https://jp.mercari.com/*"]
+}
