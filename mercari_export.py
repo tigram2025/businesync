@@ -3,8 +3,9 @@
 使い方:
   1. pip install playwright && python -m playwright install chromium
   2. python mercari_export.py
-  3. ブラウザが開いたらメルカリにログイン（SMS認証も手動で完了）
-  4. ログイン完了後、Enterキーを押すと自動収集開始
+  3. ブラウザが開いたらメルカリにログイン（SMS認証も手動で完了）し、
+     取引履歴・売上一覧ページまで手動で移動する
+  4. そのページが表示された状態でEnterキーを押すと自動収集開始
   5. 完了後に mercari_sales_YYYYMM.csv が生成される
 """
 
@@ -15,7 +16,7 @@ from datetime import datetime
 from pathlib import Path
 
 try:
-    from playwright.sync_api import sync_playwright, TimeoutError as PWTimeoutError
+    from playwright.sync_api import sync_playwright
 except ImportError:
     print("Playwright が見つかりません。以下を実行してください:")
     print("  pip install playwright")
@@ -23,21 +24,18 @@ except ImportError:
     sys.exit(1)
 
 BASE_URL = "https://jp.mercari.com"
-TRANSACTIONS_URL = f"{BASE_URL}/mypage/transaction"
 
 HEADERS = ["取引日時", "商品名", "カテゴリ", "売上金額(円)", "手数料(円)", "送料(円)", "振込金額(円)", "取引ID"]
 
 
-def wait_for_login(page):
+def wait_for_navigation_to_transactions(page):
     print("\nブラウザでメルカリにログインしてください。")
-    print("SMS認証など完了後、このターミナルでEnterキーを押してください...")
+    print("ログイン後、画面上部の自分のアイコン →「お知らせ」や「マイページ」→")
+    print("「売上・振込申請」または「取引履歴」のページまで、ブラウザ上で手動で移動してください。")
+    print("（売れた商品の一覧が表示されているページであればOKです）")
+    print("そのページが表示されたら、このターミナルでEnterキーを押してください...")
     input()
-    print("ログイン確認中...")
-    try:
-        page.wait_for_selector('[data-testid="user-icon"], [class*="avatar"], nav[aria-label]', timeout=10000)
-        print("ログイン確認OK")
-    except PWTimeoutError:
-        print("警告: ログイン状態の自動確認ができませんでした。続行します。")
+    print(f"現在のページ: {page.url}")
 
 
 def parse_price(text: str) -> int:
@@ -51,10 +49,16 @@ def parse_price(text: str) -> int:
         return 0
 
 
+def dump_debug(page, page_num):
+    content = page.content()
+    filename = f"debug_page_{page_num}.html"
+    with open(filename, "w", encoding="utf-8") as f:
+        f.write(content)
+    print(f"  {filename} にページHTMLを保存しました。")
+
+
 def scrape_transactions(page) -> list[dict]:
     records = []
-    page.goto(TRANSACTIONS_URL, wait_until="networkidle")
-    time.sleep(2)
 
     page_num = 1
     while True:
@@ -69,11 +73,7 @@ def scrape_transactions(page) -> list[dict]:
 
         if not items:
             print(f"  取引アイテムが見つかりません（ページ {page_num}）。セレクタを調整してください。")
-            # デバッグ用: ページHTMLの一部を出力
-            content = page.content()
-            with open("debug_page.html", "w", encoding="utf-8") as f:
-                f.write(content)
-            print("  debug_page.html にページHTMLを保存しました。")
+            dump_debug(page, page_num)
             break
 
         for item in items:
@@ -179,7 +179,7 @@ def main():
 
         page.goto(f"{BASE_URL}/login", wait_until="domcontentloaded")
 
-        wait_for_login(page)
+        wait_for_navigation_to_transactions(page)
 
         print("\n取引履歴を収集中...")
         all_records = scrape_transactions(page)
