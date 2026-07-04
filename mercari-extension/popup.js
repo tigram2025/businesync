@@ -2,8 +2,10 @@ const statusEl = document.getElementById("status");
 
 function extractTransactions() {
   // ページ内で実行される（拡張機能のコードとは別コンテキスト）
-  const priceRegex = /¥[\d,]+/;
+  // ¥X,XXX 形式に厳密マッチ（末尾に「5時間前」の数字が混入するのを防ぐ）
+  const priceRegex = /¥\d{1,3}(?:,\d{3})*/;
   const dateRegex = /\d{4}[\/\-年]\d{1,2}[\/\-月]\d{1,2}日?|\d{1,2}[\/月]\d{1,2}日?/;
+  const relativeRegex = /\d+時間前|\d+日前|昨日|今日/;
 
   // 価格(¥)を含む子要素が一番多いリスト(ul/ol)を「取引一覧」とみなす
   const lists = document.querySelectorAll("ul, ol");
@@ -28,9 +30,13 @@ function extractTransactions() {
     const priceMatch = text.match(priceRegex);
     if (!priceMatch) continue;
 
-    const dateMatch = text.match(dateRegex);
+    const dateMatch = text.match(dateRegex) || text.match(relativeRegex);
     const img = child.querySelector("img[alt]");
-    const title = img && img.alt ? img.alt.trim() : text.slice(0, 60);
+    // alt末尾の「のサムネイル undefined」などを除去
+    const rawAlt = img && img.alt ? img.alt.trim() : "";
+    const title = rawAlt
+      ? rawAlt.replace(/のサムネイル.*$/u, "").trim()
+      : text.slice(0, 60);
     const price = parseInt(priceMatch[0].replace(/[¥,]/g, ""), 10);
     const fee = Math.round(price * 0.1);
 
