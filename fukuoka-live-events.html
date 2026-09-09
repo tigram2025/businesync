@@ -80,6 +80,7 @@ td.op-cell{width:36px;text-align:center}
 <main>
 <h1>🎤 福岡ライブイベント抽出ツール</h1>
 <div class="sub">イベント一覧サイトなどからコピーしたテキストを貼り付けると、日付を含む行を自動でイベント行として抽出します（対応期間: 既定3か月）。抽出後は表を直接編集でき、CSV / Excel で書き出せます。</div>
+<div class="sub" style="color:var(--yel)">⚠ 初期表示のイベントは2026-09-09時点でWeb検索により収集した参考データです（マリンメッセ福岡・Zepp福岡・みずほPayPayドーム・福岡サンパレスなど大規模会場が中心、小規模ライブハウスは未収録）。「要確認」の付いた行や、宿泊料金を大きく動かす前は公式サイトで日程を再確認してください。</div>
 
 <div class="card">
   <h2>📅 対象期間</h2>
@@ -131,6 +132,7 @@ td.op-cell{width:36px;text-align:center}
     <button class="btn btn-o btn-sm" onclick="addRow()">＋ 行を追加</button>
     <button class="btn btn-o btn-sm" onclick="removeSelected()">選択行を削除</button>
     <button class="btn btn-r btn-sm" onclick="clearAll()">全削除</button>
+    <button class="btn btn-o btn-sm" onclick="resetToSeed()">初期データに戻す</button>
     <button class="btn btn-o btn-sm" onclick="exportCSV()">CSV出力</button>
     <button class="btn btn-g btn-sm" onclick="exportExcel()">Excel出力</button>
   </div>
@@ -307,6 +309,12 @@ function clearAll(){
   rows = [];
   save(); render();
 }
+function resetToSeed(){
+  if (!confirm('現在の一覧を破棄して初期データ（収集済みイベント）に戻しますか？')) return;
+  rows = SEED_DATA.map(d => ({ id: uid(), venue:'', name:'', cast:'', price:'', url:'', memo:'', ...d }));
+  save(); render();
+  toast('初期データに戻しました');
+}
 function toggleAll(checked){
   document.querySelectorAll('.row-chk').forEach(el => el.checked = checked);
 }
@@ -335,14 +343,46 @@ function computeDupKeys(){
   return counts;
 }
 
+// 2026-09-09 時点でWeb検索により収集した実イベント情報（大規模会場中心）。
+// 民泊の価格調整の目安として使えるよう、開催日・アーティスト・会場のみ収録。
+// 各会場の全公演を網羅したものではないため、価格を大きく動かす前に公式サイトでの確認を推奨。
+const SEED_DATA = [
+  { date:'2026-09-14', venue:'Zepp Fukuoka', name:'横山裕（SUPER EIGHT）ソロライブツアー', memo:'要確認（検索結果の要約より）' },
+  { date:'2026-09-15', venue:'Zepp Fukuoka', name:'横山裕（SUPER EIGHT）ソロライブツアー', memo:'要確認（検索結果の要約より）' },
+  { date:'2026-09-19', venue:'マリンメッセ福岡', name:'DREAMS COME TRUE', memo:'' },
+  { date:'2026-09-20', venue:'マリンメッセ福岡', name:'DREAMS COME TRUE', memo:'' },
+  { date:'2026-09-21', venue:'Zepp Fukuoka', name:'GRe4N BOYZ 全国ツアー', memo:'要確認（検索結果の要約より）' },
+  { date:'2026-09-22', venue:'マリンメッセ福岡', name:'ME:I', memo:'' },
+  { date:'2026-09-23', venue:'マリンメッセ福岡', name:'ME:I', memo:'' },
+  { date:'2026-09-26', venue:'マリンメッセ福岡', name:'M!LK', memo:'' },
+  { date:'2026-09-27', venue:'マリンメッセ福岡', name:'M!LK', memo:'' },
+  { date:'2026-10-03', venue:'マリンメッセ福岡', name:'KEY TO LIT', memo:'' },
+  { date:'2026-10-04', venue:'マリンメッセ福岡', name:'KEY TO LIT', memo:'' },
+  { date:'2026-10-07', venue:'マリンメッセ福岡', name:'木村拓哉', memo:'' },
+  { date:'2026-10-17', venue:'Zepp Fukuoka', name:'TMG（Tak Matsumoto Group）全国ツアー', memo:'' },
+  { date:'2026-10-24', venue:'マリンメッセ福岡', name:'マカロニえんぴつ 全国アリーナツアー', memo:'' },
+  { date:'2026-10-25', venue:'マリンメッセ福岡', name:'マカロニえんぴつ 全国アリーナツアー', memo:'' },
+  { date:'2026-10-26', venue:'福岡サンパレス', name:'FRUITS ZIPPER', memo:'' },
+  { date:'2026-11-14', venue:'みずほPayPayドーム福岡', name:'藤井風', memo:'' },
+  { date:'2026-11-15', venue:'みずほPayPayドーム福岡', name:'藤井風', memo:'' },
+  { date:'2026-11-27', venue:'マリンメッセ福岡', name:'米津玄師 TOUR「GHOST」', memo:'' },
+  { date:'2026-11-28', venue:'マリンメッセ福岡', name:'米津玄師 TOUR「GHOST」', memo:'' },
+  { date:'2026-12-06', venue:'マリンメッセ福岡', name:'山下智久', memo:'' },
+  { date:'2026-12-19', venue:'マリンメッセ福岡', name:'GLAY', memo:'3か月の対象期間外だが参考として掲載' },
+  { date:'2026-12-20', venue:'マリンメッセ福岡', name:'GLAY', memo:'3か月の対象期間外だが参考として掲載' },
+  { date:'2026-12-26', venue:'みずほPayPayドーム福岡', name:'BIGBANG', memo:'3か月の対象期間外だが参考として掲載（ドーム公演のため宿泊需要への影響大）' },
+  { date:'2026-12-27', venue:'みずほPayPayドーム福岡', name:'BIGBANG', memo:'3か月の対象期間外だが参考として掲載（ドーム公演のため宿泊需要への影響大）' },
+];
+
 function save(){
   localStorage.setItem(STORE_KEY, JSON.stringify(rows));
 }
 function load(){
   try {
     const raw = localStorage.getItem(STORE_KEY);
-    rows = raw ? JSON.parse(raw) : [];
-  } catch(e) { rows = []; }
+    if (raw) { rows = JSON.parse(raw); return; }
+  } catch(e) {}
+  rows = SEED_DATA.map(d => ({ id: uid(), venue:'', name:'', cast:'', price:'', url:'', memo:'', ...d }));
 }
 
 function render(){
