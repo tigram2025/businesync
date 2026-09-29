@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DHL入力アシスト — Catawiki→MyDHL+</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Hiragino Sans','Noto Sans JP',sans-serif;background:#0f0f14;color:#e8e8f0;min-height:100vh;padding:20px;max-width:960px;margin:0 auto}
+h1{font-size:16px;font-weight:600;color:#22d3a0;margin-bottom:6px;letter-spacing:.5px}
+.lead{font-size:12px;color:#9090b0;margin-bottom:20px;line-height:1.7}
+h2{font-size:13px;font-weight:600;color:#c0c0d8;margin-bottom:12px}
+
+.card{background:#18181f;border:1px solid #28283a;border-radius:12px;padding:20px;margin-bottom:16px}
+
+/* Defaults */
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.field label{font-size:11px;color:#9090b0}
+.field input,.field select,textarea{background:#111118;border:1px solid #28283a;border-radius:6px;color:#e8e8f0;font-size:13px;padding:7px 9px;font-family:inherit;width:100%}
+.field input:focus,textarea:focus{outline:none;border-color:#22d3a0}
+
+/* Orders */
+.order{border:1px solid #28283a;border-radius:10px;padding:14px;margin-bottom:12px;background:#141419}
+.order-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.order-head .no{font-size:13px;font-weight:600;color:#22d3a0}
+textarea{min-height:120px;resize:vertical;line-height:1.5;margin-bottom:10px}
+.rows{display:grid;gap:6px}
+.row{display:grid;grid-template-columns:96px 1fr auto;gap:8px;align-items:center}
+.row label{font-size:11px;color:#9090b0}
+.row input{background:#111118;border:1px solid #28283a;border-radius:6px;color:#e8e8f0;font-size:13px;padding:6px 8px;width:100%;min-width:0}
+.row input.empty{border-color:#5a3a3a}
+.cp{background:#202028;color:#9090b0;border:1px solid #28283a;border-radius:6px;padding:6px 10px;font-size:12px;cursor:pointer;white-space:nowrap}
+.cp:hover{color:#e8e8f0}
+.cp.done{color:#22d3a0;border-color:#22d3a0}
+
+/* Buttons */
+.actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.btn{padding:9px 18px;border-radius:8px;border:none;cursor:pointer;font-size:13px;font-weight:500;transition:all .15s}
+.btn-g{background:#22d3a0;color:#000}.btn-g:hover{background:#2fffc0}
+.btn-o{background:#202028;color:#9090b0;border:1px solid #28283a}.btn-o:hover{color:#e8e8f0}
+.btn-x{background:none;border:none;color:#55556a;cursor:pointer;font-size:12px}.btn-x:hover{color:#f05a5a}
+
+.note{font-size:11px;color:#55556a;line-height:1.7;margin-top:10px}
+
+/* Toast */
+#toast{position:fixed;bottom:24px;right:24px;background:#18181f;border:1px solid #22d3a0;color:#22d3a0;border-radius:8px;padding:10px 16px;font-size:13px;opacity:0;transition:opacity .3s;pointer-events:none}
+#toast.on{opacity:1}
+
+@media (max-width:560px){
+  body{padding:16px}
+  .row{grid-template-columns:1fr auto}
+  .row label{grid-column:1/-1}
+}
+</style>
+</head>
+<body>
+
+<h1>DHL入力アシスト — Catawiki → MyDHL+</h1>
+<p class="lead">
+Catawikiの注文画面から購入者の住所をコピーして貼り付けると、MyDHL+の入力欄ごとに分けて表示します。<br>
+項目の横の「コピー」を押して、MyDHL+に貼り付けてください。まとめて登録したいときはCSVで書き出せます。
+</p>
+
+<div class="card">
+  <h2>共通設定（毎回同じ内容。ブラウザに記憶されます）</h2>
+  <div class="grid">
+    <div class="field"><label>内容品の説明（英語）</label><input id="d-desc" placeholder="例: Antique ceramic vase"></div>
+    <div class="field"><label>通貨</label>
+      <select id="d-cur"><option>EUR</option><option>JPY</option><option>USD</option><option>GBP</option></select>
+    </div>
+    <div class="field"><label>重量 (kg)</label><input id="d-weight" inputmode="decimal" placeholder="例: 1.5"></div>
+    <div class="field"><label>長さ (cm)</label><input id="d-l" inputmode="numeric"></div>
+    <div class="field"><label>幅 (cm)</label><input id="d-w" inputmode="numeric"></div>
+    <div class="field"><label>高さ (cm)</label><input id="d-h" inputmode="numeric"></div>
+  </div>
+  <p class="note">注文ごとに違う場合は、下の各注文の欄で上書きできます。</p>
+</div>
+
+<div class="card">
+  <h2>注文</h2>
+  <div id="orders"></div>
+  <div class="actions">
+    <button class="btn btn-o" id="add">＋ 注文を追加</button>
+    <button class="btn btn-g" id="csv">CSVを書き出す</button>
+    <button class="btn btn-o" id="clear">すべてクリア</button>
+  </div>
+  <p class="note">
+    住所の分け方がずれた場合は、欄を直接書き換えてください（書き換えた内容がコピー・CSVに使われます）。<br>
+    CSVは、MyDHL+の「発送のインポート」で使えます。初回だけ、MyDHL+側で列と項目の対応（インポートテンプレート）を設定してください。
+  </p>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ---------- Country table (name/native name/code -> ISO code) ----------
+const COUNTRIES = {
+  'germany':'DE','deutschland':'DE','de':'DE',
+  'netherlands':'NL','the netherlands':'NL','nederland':'NL','holland':'NL','nl':'NL',
+  'belgium':'BE','belgië':'BE','belgie':'BE','belgique':'BE','be':'BE',
+  'france':'FR','fr':'FR',
+  'italy':'IT','italia':'IT','it':'IT',
+  'spain':'ES','españa':'ES','espana':'ES','es':'ES',
+  'portugal':'PT','pt':'PT',
+  'austria':'AT','österreich':'AT','osterreich':'AT','at':'AT',
+  'switzerland':'CH','schweiz':'CH','suisse':'CH','svizzera':'CH','ch':'CH',
+  'luxembourg':'LU','lu':'LU',
+  'united kingdom':'GB','uk':'GB','great britain':'GB','england':'GB','scotland':'GB','wales':'GB','gb':'GB',
+  'ireland':'IE','ie':'IE',
+  'denmark':'DK','danmark':'DK','dk':'DK',
+  'sweden':'SE','sverige':'SE','se':'SE',
+  'norway':'NO','norge':'NO','no':'NO',
+  'finland':'FI','suomi':'FI','fi':'FI',
+  'poland':'PL','polska':'PL','pl':'PL',
+  'czech republic':'CZ','czechia':'CZ','česko':'CZ','cz':'CZ',
+  'slovakia':'SK','slovensko':'SK','sk':'SK',
+  'hungary':'HU','magyarország':'HU','hu':'HU',
+  'romania':'RO','românia':'RO','ro':'RO',
+  'bulgaria':'BG','bg':'BG',
+  'greece':'GR','ελλάδα':'GR','gr':'GR',
+  'croatia':'HR','hrvatska':'HR','hr':'HR',
+  'slovenia':'SI','slovenija':'SI','si':'SI',
+  'estonia':'EE','eesti':'EE','ee':'EE',
+  'latvia':'LV','latvija':'LV','lv':'LV',
+  'lithuania':'LT','lietuva':'LT','lt':'LT',
+  'malta':'MT','mt':'MT','cyprus':'CY','cy':'CY',
+  'monaco':'MC','mc':'MC','liechtenstein':'LI','li':'LI',
+  'united states':'US','united states of america':'US','usa':'US','us':'US',
+  'canada':'CA','ca':'CA',
+  'australia':'AU','au':'AU','new zealand':'NZ','nz':'NZ',
+  'japan':'JP','日本':'JP','jp':'JP',
+  'hong kong':'HK','hk':'HK','singapore':'SG','sg':'SG',
+  'taiwan':'TW','tw':'TW','south korea':'KR','korea':'KR','kr':'KR','china':'CN','cn':'CN',
+  'israel':'IL','il':'IL','turkey':'TR','türkiye':'TR','tr':'TR',
+  'united arab emirates':'AE','uae':'AE','ae':'AE',
+  'mexico':'MX','mx':'MX','brazil':'BR','br':'BR'
+};
+
+// Postal code patterns, most specific first
+const POSTAL = [
+  /\b([A-Z]{1,2}\d[A-Z\d]?\s?\d[A-Z]{2})\b/i,   // UK
+  /\b(\d{4}\s?[A-Z]{2})\b/,                      // NL
+  /\b([A-Z]\d[A-Z]\s?\d[A-Z]\d)\b/i,             // CA
+  /\b(\d{3}-\d{4})\b/,                           // JP
+  /\b(\d{2}-\d{3})\b/,                           // PL
+  /\b(\d{3}\s\d{2})\b/,                          // SE/CZ/SK/GR
+  /\b(\d{5}(?:-\d{4})?)\b/,                      // US/DE/FR/IT/ES...
+  /\b(\d{4})\b/                                  // BE/AT/CH/DK/NO...
+];
+
+const LABEL_RE = /^(name|naam|full name|address|adres|adresse|street|straße|strasse|shipping address|delivery address|verzendadres|lieferadresse|city|stad|ort|zip|postcode|postal code|plz|country|land|pays|phone|telephone|tel|telefoon|telefon|mobile|e-?mail|buyer|koper|käufer|配送先|住所|氏名|名前|電話|国)\s*[:：]\s*/i;
+
+function lookupCountry(s){
+  const k = s.trim().replace(/[.,]$/,'').toLowerCase();
+  return COUNTRIES[k] || null;
+}
+
+function parse(text){
+  const out = {name:'',company:'',addr1:'',addr2:'',postal:'',city:'',state:'',country:'',countryCode:'',phone:'',email:''};
+  let lines = text.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+
+  const rest = [];
+  for (let raw of lines){
+    const labelMatch = raw.match(LABEL_RE);
+    const label = labelMatch ? labelMatch[1].toLowerCase() : '';
+    const l = raw.replace(LABEL_RE,'').trim();
+    if (!l) continue;
+
+    const email = l.match(/[\w.+-]+@[\w-]+\.[\w.-]+/);
+    if (email){ out.email = out.email || email[0]; continue; }
+
+    const digits = l.replace(/\D/g,'');
+    const isPhoneLabel = /phone|tel|mobile|電話/.test(label);
+    if ((isPhoneLabel || /^[+\d][\d\s()\-./]{6,}$/.test(l)) && digits.length >= 7 && !out.phone){
+      out.phone = l; continue;
+    }
+
+    const code = lookupCountry(l);
+    if (code && !out.country){ out.country = l; out.countryCode = code; continue; }
+
+    rest.push(l);
+  }
+
+  // Postal code + city line: search from the bottom (address lines come first)
+  for (let i = rest.length - 1; i >= 1; i--){
+    const l = rest[i];
+    for (const re of POSTAL){
+      const m = l.match(re);
+      if (m){
+        out.postal = m[1].toUpperCase();
+        let city = (l.slice(0, m.index) + ' ' + l.slice(m.index + m[1].length)).replace(/\s*,\s*/g,' ').trim();
+        // US style "City, ST 12345"
+        const st = city.match(/^(.*?)[\s,]+([A-Z]{2})$/);
+        if (st && out.countryCode === 'US'){ city = st[1]; out.state = st[2]; }
+        out.city = city;
+        rest.splice(i,1);
+        i = -1;
+        break;
+      }
+    }
+  }
+
+  if (rest.length) out.name = rest.shift();
+  if (rest.length >= 3) out.company = rest.shift();
+  if (rest.length) out.addr1 = rest.shift();
+  if (rest.length) out.addr2 = rest.join(', ');
+  if (!out.city && out.addr2){ out.city = out.addr2; out.addr2 = ''; }
+  return out;
+}
+
+// ---------- Fields shown per order ----------
+const FIELDS = [
+  ['name','氏名'],
+  ['company','会社名'],
+  ['addr1','住所1'],
+  ['addr2','住所2'],
+  ['postal','郵便番号'],
+  ['city','市区町村'],
+  ['state','州'],
+  ['countryCode','国コード'],
+  ['country','国名'],
+  ['phone','電話番号'],
+  ['email','メール'],
+  ['desc','内容品'],
+  ['value','申告価格'],
+  ['ref','注文番号'],
+];
+const OPTIONAL = new Set(['company','addr2','state','email','ref']);
+
+const ordersEl = document.getElementById('orders');
+let counter = 0;
+
+function addOrder(){
+  counter++;
+  const wrap = document.createElement('div');
+  wrap.className = 'order';
+  wrap.innerHTML = `
+    <div class="order-head"><span class="no">注文 ${ordersEl.children.length + 1}</span><button class="btn-x">削除</button></div>
+    <textarea placeholder="Catawikiの購入者情報（名前・住所・電話番号など）をここに貼り付け"></textarea>
+    <div class="rows"></div>`;
+  const rows = wrap.querySelector('.rows');
+  for (const [key,label] of FIELDS){
+    const r = document.createElement('div');
+    r.className = 'row';
+    r.innerHTML = `<label>${label}</label><input data-k="${key}"><button class="cp">コピー</button>`;
+    rows.appendChild(r);
+  }
+  const ta = wrap.querySelector('textarea');
+  ta.addEventListener('input', () => fill(wrap, parse(ta.value)));
+  wrap.querySelector('.btn-x').onclick = () => { wrap.remove(); renumber(); };
+  rows.addEventListener('click', e => {
+    if (!e.target.classList.contains('cp')) return;
+    const v = e.target.previousElementSibling.value;
+    copy(v, e.target);
+  });
+  rows.addEventListener('input', e => { if (e.target.tagName === 'INPUT') mark(e.target); });
+  ordersEl.appendChild(wrap);
+  fill(wrap, {});
+  return wrap;
+}
+
+function fill(wrap, data){
+  wrap.querySelectorAll('input[data-k]').forEach(inp => {
+    const k = inp.dataset.k;
+    if (k === 'desc') inp.value = inp.dataset.touched ? inp.value : val('d-desc');
+    else if (k === 'value' || k === 'ref') { /* manual */ }
+    else inp.value = data[k] || '';
+    mark(inp);
+  });
+}
+
+function mark(inp){
+  if (inp.dataset.k === 'desc' && document.activeElement === inp) inp.dataset.touched = '1';
+  inp.classList.toggle('empty', !inp.value && !OPTIONAL.has(inp.dataset.k));
+}
+
+function renumber(){
+  [...ordersEl.children].forEach((o,i) => o.querySelector('.no').textContent = `注文 ${i+1}`);
+}
+
+function val(id){ return document.getElementById(id).value.trim(); }
+
+function copy(text, btn){
+  if (!text){ toast('空欄です'); return; }
+  const done = () => {
+    toast('コピーしました: ' + (text.length > 30 ? text.slice(0,30)+'…' : text));
+    if (btn){ btn.classList.add('done'); btn.textContent = '済'; }
+  };
+  if (navigator.clipboard && window.isSecureContext){
+    navigator.clipboard.writeText(text).then(done, () => fallbackCopy(text) && done());
+  } else if (fallbackCopy(text)) done();
+}
+function fallbackCopy(text){
+  const t = document.createElement('textarea');
+  t.value = text; document.body.appendChild(t); t.select();
+  let ok = false; try { ok = document.execCommand('copy'); } catch(e){}
+  t.remove(); return ok;
+}
+
+// ---------- CSV ----------
+function csvCell(v){
+  v = String(v ?? '');
+  return /[",\n]/.test(v) ? '"' + v.replace(/"/g,'""') + '"' : v;
+}
+
+function exportCsv(){
+  const header = ['Reference','Receiver Name','Receiver Company','Address Line 1','Address Line 2','Postal Code','City','State','Country Code','Phone','Email','Contents Description','Declared Value','Currency','Weight (kg)','Length (cm)','Width (cm)','Height (cm)'];
+  const lines = [header];
+  for (const o of ordersEl.children){
+    const g = k => o.querySelector(`input[data-k="${k}"]`).value.trim();
+    if (!g('name') && !g('addr1')) continue;
+    lines.push([g('ref'),g('name'),g('company'),g('addr1'),g('addr2'),g('postal'),g('city'),g('state'),g('countryCode'),g('phone'),g('email'),g('desc'),g('value'),val('d-cur'),val('d-weight'),val('d-l'),val('d-w'),val('d-h')]);
+  }
+  if (lines.length === 1){ toast('注文が入力されていません'); return; }
+  const csv = '﻿' + lines.map(r => r.map(csvCell).join(',')).join('\r\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv'}));
+  const d = new Date();
+  a.download = `dhl-shipments-${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}.csv`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  toast(`${lines.length - 1}件をCSVに書き出しました`);
+}
+
+// ---------- Defaults (remembered in this browser) ----------
+const DEF_IDS = ['d-desc','d-cur','d-weight','d-l','d-w','d-h'];
+function loadDefaults(){
+  try {
+    const s = JSON.parse(localStorage.getItem('dhl-helper-defaults') || '{}');
+    DEF_IDS.forEach(id => { if (s[id] != null) document.getElementById(id).value = s[id]; });
+  } catch(e){}
+}
+function saveDefaults(){
+  try {
+    const s = {}; DEF_IDS.forEach(id => s[id] = document.getElementById(id).value);
+    localStorage.setItem('dhl-helper-defaults', JSON.stringify(s));
+  } catch(e){}
+}
+DEF_IDS.forEach(id => document.getElementById(id).addEventListener('input', () => {
+  saveDefaults();
+  if (id === 'd-desc') ordersEl.querySelectorAll('input[data-k="desc"]').forEach(i => { if (!i.dataset.touched){ i.value = val('d-desc'); mark(i); } });
+}));
+
+let toastTimer;
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('on');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('on'), 1800);
+}
+
+document.getElementById('add').onclick = () => addOrder().querySelector('textarea').focus();
+document.getElementById('csv').onclick = exportCsv;
+document.getElementById('clear').onclick = () => {
+  if (!confirm('入力した注文をすべて消しますか？')) return;
+  ordersEl.innerHTML = ''; addOrder();
+};
+
+loadDefaults();
+addOrder();
+</script>
+</body>
+</html>
