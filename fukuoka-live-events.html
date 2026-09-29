@@ -343,9 +343,10 @@ function computeDupKeys(){
   return counts;
 }
 
-// 2026-09-09 時点でWeb検索により収集した実イベント情報（大規模会場中心）。
+// 2026-09-09（初回）/ 2026-09-29（2027年1-3月分を追加）にWeb検索により収集した実イベント情報（大規模会場中心）。
 // 民泊の価格調整の目安として使えるよう、開催日・アーティスト・会場のみ収録。
-// 各会場の全公演を網羅したものではないため、価格を大きく動かす前に公式サイトでの確認を推奨。
+// 半年先になるほど未発表のツアーが多く、各会場の全公演を網羅したものではないため、
+// 価格を大きく動かす前に公式サイトでの確認を推奨。
 const SEED_DATA = [
   { date:'2026-09-14', venue:'Zepp Fukuoka', name:'横山裕（SUPER EIGHT）ソロライブツアー', memo:'要確認（検索結果の要約より）' },
   { date:'2026-09-15', venue:'Zepp Fukuoka', name:'横山裕（SUPER EIGHT）ソロライブツアー', memo:'要確認（検索結果の要約より）' },
@@ -368,10 +369,18 @@ const SEED_DATA = [
   { date:'2026-11-27', venue:'マリンメッセ福岡', name:'米津玄師 TOUR「GHOST」', memo:'' },
   { date:'2026-11-28', venue:'マリンメッセ福岡', name:'米津玄師 TOUR「GHOST」', memo:'' },
   { date:'2026-12-06', venue:'マリンメッセ福岡', name:'山下智久', memo:'' },
-  { date:'2026-12-19', venue:'マリンメッセ福岡', name:'GLAY', memo:'3か月の対象期間外だが参考として掲載' },
-  { date:'2026-12-20', venue:'マリンメッセ福岡', name:'GLAY', memo:'3か月の対象期間外だが参考として掲載' },
-  { date:'2026-12-26', venue:'みずほPayPayドーム福岡', name:'BIGBANG', memo:'3か月の対象期間外だが参考として掲載（ドーム公演のため宿泊需要への影響大）' },
-  { date:'2026-12-27', venue:'みずほPayPayドーム福岡', name:'BIGBANG', memo:'3か月の対象期間外だが参考として掲載（ドーム公演のため宿泊需要への影響大）' },
+  { date:'2026-12-19', venue:'マリンメッセ福岡', name:'GLAY', memo:'' },
+  { date:'2026-12-20', venue:'マリンメッセ福岡', name:'GLAY', memo:'' },
+  { date:'2026-12-26', venue:'みずほPayPayドーム福岡', name:'BIGBANG', memo:'' },
+  { date:'2026-12-27', venue:'みずほPayPayドーム福岡', name:'BIGBANG', memo:'' },
+  { date:'2027-01-16', venue:'みずほPayPayドーム福岡', name:'Number_i ワールドツアー ファイナル', memo:'' },
+  { date:'2027-01-17', venue:'みずほPayPayドーム福岡', name:'Number_i ワールドツアー ファイナル', memo:'' },
+  { date:'2027-02-06', venue:'みずほPayPayドーム福岡', name:'ENHYPEN 来日公演 4大ドームツアー', memo:'要確認（検索結果の要約より）' },
+  { date:'2027-02-07', venue:'みずほPayPayドーム福岡', name:'ENHYPEN 来日公演 4大ドームツアー', memo:'要確認（検索結果の要約より）' },
+  { date:'2027-02-13', venue:'みずほPayPayドーム福岡', name:'BE:FIRST 5th Anniversary DOME TOUR 2027', memo:'要確認（検索結果の要約より）' },
+  { date:'2027-02-14', venue:'みずほPayPayドーム福岡', name:'BE:FIRST 5th Anniversary DOME TOUR 2027', memo:'要確認（検索結果の要約より）' },
+  { date:'2027-03-27', venue:'マリンメッセ福岡', name:'SPITZ JAMBOREE TOUR 2027「kettle」', memo:'要確認（検索結果の要約より）' },
+  { date:'2027-03-28', venue:'マリンメッセ福岡', name:'SPITZ JAMBOREE TOUR 2027「kettle」', memo:'要確認（検索結果の要約より）' },
 ];
 
 function save(){
