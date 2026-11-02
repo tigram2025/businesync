@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Catawiki SOLD検索</title>
+<style>
+:root{--bg:#0f0f14;--card:#18181f;--line:#28283a;--text:#e8e8f0;--sub:#8a8aa0;--dim:#55556a;--accent:#22d3a0;--warn:#f5b942}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Hiragino Sans','Noto Sans JP',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding:16px}
+.wrap{max-width:980px;margin:0 auto}
+h1{font-size:16px;font-weight:600;color:var(--accent);margin-bottom:14px;letter-spacing:.5px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:14px}
+#drop{border:2px dashed #35354a;border-radius:10px;padding:16px;text-align:center;cursor:pointer;position:relative;background:#111118}
+#drop.over{border-color:var(--accent)}
+#drop input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%}
+#drop .t{font-size:13px;color:#c0c0d8}
+#drop .s{font-size:11px;color:var(--dim);margin-top:4px}
+#dataInfo{font-size:12px;color:var(--sub);margin-top:10px}
+.searchRow{display:flex;gap:8px}
+#q{flex:1;min-width:0;background:#111118;border:1px solid #35354a;border-radius:8px;color:var(--text);font-size:16px;padding:12px}
+#q:focus{outline:none;border-color:var(--accent)}
+.opts{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-top:10px;font-size:12px;color:var(--sub)}
+.opts select,.opts input[type=number]{background:#111118;border:1px solid #35354a;border-radius:6px;color:var(--text);padding:5px 6px;font-size:12px}
+.opts input[type=number]{width:70px}
+.hint{font-size:11px;color:var(--dim);margin-top:8px;line-height:1.6}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}
+.stat{background:#111118;border:1px solid var(--line);border-radius:8px;padding:10px}
+.stat .l{font-size:11px;color:var(--sub)}
+.stat .v{font-size:18px;font-weight:600;margin-top:2px;font-variant-numeric:tabular-nums}
+.stat .y{font-size:11px;color:var(--sub);font-variant-numeric:tabular-nums}
+#list{display:flex;flex-direction:column;gap:8px}
+.lot{display:flex;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px;text-decoration:none;color:inherit}
+.lot:hover{border-color:#3a3a52}
+.lot img{width:84px;height:84px;object-fit:cover;border-radius:6px;background:#111118;flex-shrink:0}
+.lot .noimg{width:84px;height:84px;border-radius:6px;background:#111118;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:var(--dim);font-size:11px}
+.lot .body{min-width:0;flex:1}
+.lot .title{font-size:13px;line-height:1.45;word-break:break-word}
+.lot .meta{display:flex;flex-wrap:wrap;gap:6px 12px;margin-top:6px;font-size:12px;color:var(--sub);align-items:baseline}
+.lot .price{font-size:16px;font-weight:600;color:var(--text);font-variant-numeric:tabular-nums}
+.lot .price.none{font-size:12px;font-weight:400;color:var(--dim)}
+.badge{font-size:10px;padding:2px 6px;border-radius:4px;border:1px solid #35354a;color:var(--sub)}
+.badge.nr{border-color:rgba(34,211,160,.4);color:var(--accent)}
+.empty{text-align:center;color:var(--dim);font-size:13px;padding:30px 0}
+.more{display:block;margin:12px auto 0;background:#111118;border:1px solid #35354a;color:var(--text);border-radius:8px;padding:8px 18px;cursor:pointer}
+@media (max-width:520px){.lot img,.lot .noimg{width:64px;height:64px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>Catawiki SOLD検索</h1>
+
+<div class="card">
+  <div id="drop">
+    <input type="file" id="file" accept=".json,application/json">
+    <div class="t">sold_data.json をここにドロップ（またはクリックして選択）</div>
+    <div class="s">デスクトップの katawiki_sold フォルダの中にあります。一度読み込むとこのブラウザに保存されます</div>
+  </div>
+  <div id="dataInfo">データ未読み込み</div>
+</div>
+
+<div class="card">
+  <div class="searchRow">
+    <input id="q" type="search" placeholder="例: LOUIS VUITTON BAG / ヴィトン 財布 / seiko 5606" autocomplete="off">
+  </div>
+  <div class="opts">
+    <label>並び順
+      <select id="sort">
+        <option value="date">新しい順</option>
+        <option value="high">高い順</option>
+        <option value="low">安い順</option>
+        <option value="bids">入札数順</option>
+      </select>
+    </label>
+    <label><input type="checkbox" id="onlyPrice" checked> 入札額ありのみ</label>
+    <label><input type="checkbox" id="onlyNR"> No Reserveのみ</label>
+    <label>1€ = <input type="number" id="rate" min="1" step="0.1"> 円</label>
+  </div>
+  <div class="hint">スペース区切りで全部を含む商品を探します。ブランドのカタカナ表記・略称（LV、ヴィトンなど）・カテゴリの日本語（バッグ、財布、時計など）・1文字程度のつづり違いにも対応しています。<br>
+  価格は Catawiki の最終入札額です。最低落札価格（リザーブ）に届かず不成立だった商品も含まれる可能性があります。No Reserve の商品は必ず落札されています。</div>
+</div>
+
+<div class="card" id="statsCard" style="display:none">
+  <div class="stats" id="stats"></div>
+</div>
+
+<div id="list"></div>
+<button class="more" id="more" style="display:none">さらに表示</button>
+</div>
+
+<script>
+// ------------------------------------------------------------ 表記ゆれ辞書
+const GROUPS = [
+  // ブランド
+  ['louis vuitton','lv','vuitton','vitton','viton','vuiton','ルイヴィトン','ルイ・ヴィトン','ヴィトン','ビトン','ルイビトン'],
+  ['chanel','シャネル'],
+  ['hermes','エルメス'],
+  ['gucci','グッチ'],
+  ['prada','プラダ'],
+  ['miu miu','miumiu','ミュウミュウ'],
+  ['christian dior','dior','ディオール'],
+  ['celine','セリーヌ'],
+  ['fendi','フェンディ'],
+  ['bottega veneta','bottega','ボッテガ','ボッテガヴェネタ'],
+  ['saint laurent','ysl','yves saint laurent','サンローラン'],
+  ['balenciaga','バレンシアガ'],
+  ['loewe','ロエベ'],
+  ['goyard','ゴヤール'],
+  ['burberry','バーバリー'],
+  ['coach','コーチ'],
+  ['salvatore ferragamo','ferragamo','フェラガモ'],
+  ['tiffany','ティファニー'],
+  ['cartier','カルティエ'],
+  ['bvlgari','bulgari','ブルガリ'],
+  ['van cleef','ヴァンクリーフ','ヴァンクリ'],
+  ['rolex','ロレックス'],
+  ['omega','オメガ'],
+  ['tudor','チューダー','チュードル'],
+  ['grand seiko','グランドセイコー','gs'],
+  ['seiko','セイコー'],
+  ['citizen','シチズン'],
+  ['casio','カシオ'],
+  ['tag heuer','heuer','タグホイヤー'],
+  ['longines','ロンジン'],
+  ['iwc'],
+  ['breitling','ブライトリング'],
+  ['panerai','パネライ'],
+  ['audemars piguet','ap','オーデマピゲ'],
+  ['patek philippe','patek','パテック'],
+  ['jaeger','ジャガールクルト'],
+  ['zenith','ゼニス'],
+  // カテゴリ
+  ['bag','バッグ','バック','かばん','カバン','鞄','tote','shoulder','handbag','crossbody','backpack','clutch','pochette','sac','tas','borsa','tasche','bolso','speedy','neverfull','keepall'],
+  ['wallet','財布','サイフ','さいふ','purse','portefeuille','portemonnaie','billfold','card holder','cardholder','coin'],
+  // Catawiki の時計タイトルには watch と書かれないことが多いので時計ブランド名も含める
+  ['watch','時計','腕時計','montre','horloge','orologio','uhr','reloj','rolex','omega','tudor','seiko','citizen','casio','tag heuer','heuer','longines','iwc','breitling','panerai','audemars piguet','patek philippe','jaeger','zenith','tissot','hamilton','oris','orient','chronograph','automatic','quartz'],
+  ['necklace','ネックレス','pendant','ペンダント'],
+  ['bracelet','ブレスレット','bangle','バングル'],
+  ['ring','リング','指輪'],
+  ['earrings','ピアス','イヤリング','earring'],
+  ['scarf','スカーフ','ストール','shawl','stole','foulard','carre'],
+  ['belt','ベルト'],
+  ['sunglasses','サングラス','glasses','メガネ','眼鏡'],
+  ['shoes','靴','シューズ','sneakers','スニーカー','pumps','パンプス','boots','ブーツ','loafers'],
+  ['jacket','ジャケット','coat','コート'],
+  ['men','メンズ','男性','homme','herren'],
+  ['women','レディース','女性','femme','dames','damen','ladies'],
+  ['automatic','自動巻き','自動巻','オートマ','automatico','automatique'],
+  ['quartz','クォーツ','クオーツ'],
+  ['chronograph','クロノグラフ','クロノ'],
+  ['monogram','モノグラム'],
+  ['damier','ダミエ'],
+  ['gold','ゴールド','金','oro'],
+  ['silver','シルバー','銀','argent'],
+  ['leather','レザー','革','cuir','leder'],
+];
+
+function norm(s){
+  return (s||'').normalize('NFKC').toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g,'')
+    .replace(/[・･]/g,'')
+    .replace(/[^\p{L}\p{N}\s]/gu,' ')
+    .replace(/\s+/g,' ').trim();
+}
+const G = GROUPS.map(g=>[...new Set(g.map(norm))]);
+const BRAND_COUNT = GROUPS.findIndex(g=>g[0]==='bag'); // ここより前がブランド
+const wordMap = new Map();   // 1単語の別名 → グループ番号
+const phrases = [];          // 複数単語の別名
+G.forEach((g,i)=>g.forEach(w=>{
+  if(w.includes(' ')) phrases.push([w,i]);
+  else if(!wordMap.has(w)) wordMap.set(w,i);
+}));
+// 複数語ブランドの各単語（louis / vuitton 等）でもヒットさせる（単独の別名を優先）
+G.forEach((g,i)=>{ if(i<BRAND_COUNT) g.forEach(w=>{
+  if(w.includes(' ')) w.split(' ').forEach(p=>{ if(p.length>=4 && p!=='grand' && !wordMap.has(p)) wordMap.set(p,i); });
+});});
+phrases.sort((a,b)=>b[0].length-a[0].length);
+
+function lev1(a,b){ // 編集距離が1以内か
+  if(Math.abs(a.length-b.length)>1) return false;
+  let i=0,j=0,d=0;
+  while(i<a.length&&j<b.length){
+    if(a[i]===b[j]){i++;j++;continue}
+    if(++d>1) return false;
+    if(a.length>b.length) i++; else if(b.length>a.length) j++; else {i++;j++}
+  }
+  return d+(a.length-i)+(b.length-j)<=1;
+}
+
+// クエリ → 条件の配列（各条件は「どれかの文字列を含む」）
+function parseQuery(q){
+  let s=' '+norm(q)+' ';
+  const conds=[];
+  for(const [p,i] of phrases){
+    if(s.includes(' '+p+' ')){ conds.push({group:i}); s=s.split(' '+p+' ').join(' '); }
+  }
+  for(const t of s.trim().split(' ').filter(Boolean)){
+    if(wordMap.has(t)) conds.push({group:wordMap.get(t)});
+    else conds.push({word:t});
+  }
+  // 同じグループは1回に
+  const seen=new Set();
+  return conds.filter(c=>{const k=c.group!=null?'g'+c.group:'w'+c.word; if(seen.has(k))return false; seen.add(k); return true});
+}
+
+function matches(lot,conds){
+  const t=lot._n, ws=lot._w;
+  return conds.every(c=>{
+    if(c.group!=null){
+      return G[c.group].some(syn=>{
+        if(syn.length<=3 && /^[a-z0-9]+$/.test(syn)) return ws.has(syn); // 短い英字は単語一致
+        return t.includes(syn);
+      });
+    }
+    if(t.includes(c.word)) return true;
+    if(c.word.length>=5) for(const w of ws) if(lev1(c.word,w)) return true;
+    return false;
+  });
+}
+
+// ------------------------------------------------------------ データ
+let LOTS=[], shown=60;
+const $=id=>document.getElementById(id);
+const store={
+  get(k){try{return localStorage.getItem(k)}catch(e){return null}},
+  set(k,v){try{localStorage.setItem(k,v);return true}catch(e){return false}}
+};
+
+function prepare(data){
+  const lots=(data&&data.lots)||[];
+  return lots.filter(l=>l&&l.title).map(l=>{
+    const n=norm(l.title+' '+(l.brand||''));
+    return Object.assign({},l,{_n:n,_w:new Set(n.split(' '))});
+  });
+}
+
+function loadData(text,save){
+  let data;
+  try{data=JSON.parse(text)}catch(e){alert('JSONとして読めませんでした');return}
+  if(!data.lots){alert('このファイルには商品データ（lots）がありません。最新の extract_katawiki.py で作り直してください。');return}
+  LOTS=prepare(data);
+  const priced=LOTS.filter(l=>l.final_bid).length;
+  const dates=LOTS.map(l=>l.date).filter(Boolean).sort();
+  $('dataInfo').textContent=`${LOTS.length}件（入札額あり ${priced}件）／期間 ${dates[0]||'-'} 〜 ${dates[dates.length-1]||'-'}／作成 ${(data.generated_at||'').slice(0,10)}`;
+  if(save && !store.set('cwSoldData',text)) $('dataInfo').textContent+='（ブラウザへの保存はできませんでした）';
+  render();
+}
+
+function yen(eur){const r=parseFloat($('rate').value)||0; return r?'¥'+Math.round(eur*r).toLocaleString('ja-JP'):''}
+function eur(v){return '€'+Math.round(v).toLocaleString('ja-JP')}
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+
+function render(){
+  const conds=parseQuery($('q').value);
+  let res=LOTS.filter(l=>(!$('onlyPrice').checked||l.final_bid)&&(!$('onlyNR').checked||l.no_reserve)&&(!conds.length||matches(l,conds)));
+  const sort=$('sort').value;
+  const by={date:(a,b)=>(b.date||'').localeCompare(a.date||''),high:(a,b)=>(b.final_bid||0)-(a.final_bid||0),low:(a,b)=>(a.final_bid||Infinity)-(b.final_bid||Infinity),bids:(a,b)=>(b.bid_count||0)-(a.bid_count||0)}[sort];
+  res.sort(by);
+
+  const prices=res.map(l=>l.final_bid).filter(v=>v>0).sort((a,b)=>a-b);
+  if(LOTS.length){
+    $('statsCard').style.display='';
+    const avg=prices.length?prices.reduce((a,b)=>a+b,0)/prices.length:0;
+    const med=prices.length?(prices.length%2?prices[(prices.length-1)/2]:(prices[prices.length/2-1]+prices[prices.length/2])/2):0;
+    const cell=(l,v)=>`<div class="stat"><div class="l">${l}</div><div class="v">${v?eur(v):'-'}</div><div class="y">${v?yen(v):''}</div></div>`;
+    $('stats').innerHTML=`<div class="stat"><div class="l">件数</div><div class="v">${res.length}</div><div class="y">価格あり ${prices.length}</div></div>`
+      +cell('中央値',med)+cell('平均',avg)+cell('最安',prices[0])+cell('最高',prices[prices.length-1]);
+  }
+
+  const list=$('list');
+  if(!LOTS.length){list.innerHTML='<div class="empty">まず sold_data.json を読み込んでください</div>';$('more').style.display='none';return}
+  if(!res.length){list.innerHTML='<div class="empty">該当なし（「入札額ありのみ」を外すと増えるかもしれません）</div>';$('more').style.display='none';return}
+  list.innerHTML=res.slice(0,shown).map(l=>{
+    const img=l.image?`<img src="${esc(l.image)}" loading="lazy" alt="">`:'<div class="noimg">画像なし</div>';
+    const price=l.final_bid?`<span class="price">${eur(l.final_bid)}</span><span>${yen(l.final_bid)}</span>`:'<span class="price none">入札額不明</span>';
+    const bids=l.bid_count?`<span>入札 ${l.bid_count}回${l.bidders?' / '+l.bidders+'人':''}</span>`:'';
+    const nr=l.no_reserve?'<span class="badge nr">No Reserve</span>':'';
+    return `<a class="lot" href="${esc(l.url||('https://www.catawiki.com/en/l/'+l.lot_id))}" target="_blank" rel="noopener">${img}<div class="body"><div class="title">${esc(l.title)}</div><div class="meta">${price}${bids}<span>${esc(l.date||'')}</span>${nr}</div></div></a>`;
+  }).join('');
+  $('more').style.display=res.length>shown?'':'none';
+}
+
+// ------------------------------------------------------------ イベント
+function readFile(f){const r=new FileReader();r.onload=()=>loadData(r.result,true);r.readAsText(f)}
+$('file').addEventListener('change',e=>{if(e.target.files[0])readFile(e.target.files[0])});
+const drop=$('drop');
+['dragenter','dragover'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('over')}));
+['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('over')}));
+drop.addEventListener('drop',e=>{const f=e.dataTransfer.files[0];if(f)readFile(f)});
+
+let timer;
+$('q').addEventListener('input',()=>{clearTimeout(timer);timer=setTimeout(()=>{shown=60;render()},120)});
+['sort','onlyPrice','onlyNR'].forEach(id=>$(id).addEventListener('change',()=>{shown=60;render()}));
+$('rate').addEventListener('input',()=>{store.set('cwRate',$('rate').value);render()});
+$('more').addEventListener('click',()=>{shown+=60;render()});
+
+$('rate').value=store.get('cwRate')||'170';
+const saved=store.get('cwSoldData');
+if(saved) loadData(saved,false); else render();
+</script>
+</body>
+</html>

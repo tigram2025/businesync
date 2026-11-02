@@ -316,6 +316,93 @@ def enrich(rec):
     return rec
 
 
+# ---------------------------------------------------------------- 商品(ロット)データの組み立て
+LOTS_API_RE = re.compile(r"/buyer/api/v\d+/lots(?:\?|$)")
+BIDS_API_RE = re.compile(r"/buyer/api/v\d+/lots/(\d+)/bids")
+
+
+def build_lots(cache, history):
+    """Catawiki の API キャッシュから 1 商品 = 1 レコードの一覧を作る
+
+    - /buyer/api/v1/lots?ids=...   → 商品名・URL・画像・オークション ID
+    - /buyer/api/v3/lots/<ID>/bids → 入札履歴（最高額 = 最終入札額、最後の入札日時）
+    - 閲覧履歴の /l/<ID>-<slug>     → 上の API が無い商品も名前だけは拾う
+    """
+    lots = {}
+
+    def lot(lid):
+        return lots.setdefault(str(lid), {"lot_id": str(lid)})
+
+    for r in history:
+        lm = LOT_RE.search(r["url"])
+        if not lm:
+            continue
+        L = lot(lm.group(1))
+        L.setdefault("url", r["url"].split("?")[0])
+        t = re.sub(r"\s*-\s*(auction online\s*)?Catawiki\s*$", "", r.get("title") or "", flags=re.I)
+        if t and not L.get("title"):
+            L["title"] = t
+        if not L.get("title") and lm.group(2):
+            L["title"] = lm.group(2).replace("-", " ")
+        L["viewed_at"] = max(L.get("viewed_at") or "", r.get("last_visit") or "")
+
+    for r in cache:
+        url, text = r["url"], r.get("text", "")
+        if LOTS_API_RE.search(url):
+            try:
+                data = json.loads(text)
+            except ValueError:
+                continue
+            for x in data.get("lots", []) if isinstance(data, dict) else []:
+                if not isinstance(x, dict) or "id" not in x:
+                    continue
+                L = lot(x["id"])
+                if x.get("title"):
+                    L["title"] = x["title"]
+                for k_src, k_dst in (("url", "url"), ("thumbnail2_url", "image"), ("auction_id", "auction_id")):
+                    if x.get(k_src):
+                        L[k_dst] = x[k_src]
+                L["seen_at"] = max(L.get("seen_at") or "", r.get("cached_at") or "")
+            continue
+        bm = BIDS_API_RE.search(url)
+        if bm:
+            try:
+                data = json.loads(text)
+            except ValueError:
+                continue
+            bids = data.get("bids") if isinstance(data, dict) else None
+            if not isinstance(bids, list):
+                continue
+            L = lot(bm.group(1))
+            amounts = [b.get("amount") for b in bids if isinstance(b, dict) and isinstance(b.get("amount"), (int, float))]
+            dates = [b.get("created_at") for b in bids if isinstance(b, dict) and b.get("created_at")]
+            L["bid_count"] = len(bids)
+            L["bidders"] = len({(b.get("bidder") or {}).get("token") for b in bids if isinstance(b, dict)})
+            if amounts:
+                L["final_bid"] = max(amounts)
+                L["currency"] = next((b.get("currency_code") for b in bids if isinstance(b, dict) and b.get("currency_code")), "EUR")
+            if dates:
+                L["first_bid_at"] = min(dates)
+                L["last_bid_at"] = max(dates)
+            # bids 以外のトップレベル項目（落札済みフラグ等があれば残す）
+            extra = {k: v for k, v in data.items() if k != "bids" and not isinstance(v, (list, dict))}
+            if extra:
+                L["bids_meta"] = extra
+            L["seen_at"] = max(L.get("seen_at") or "", r.get("cached_at") or "")
+
+    out = []
+    for L in lots.values():
+        if not L.get("title"):
+            continue
+        t = L["title"]
+        L["brand"] = t.split(" - ")[0].strip() if " - " in t else ""
+        L["no_reserve"] = bool(re.search(r"no\s*reserve", t, re.I))
+        L["date"] = (L.get("last_bid_at") or L.get("viewed_at") or L.get("seen_at") or "")[:10]
+        out.append(L)
+    out.sort(key=lambda x: x.get("date") or "", reverse=True)
+    return out
+
+
 # ---------------------------------------------------------------- main
 def main():
     ap = argparse.ArgumentParser(description="Chrome からカタウィキのデータを抽出")
@@ -351,6 +438,7 @@ def main():
         stats.update(s)
         print(f"  {prof}: 履歴 {len(h)} 件 / キャッシュ {len(c)} 件")
 
+    lot_data = build_lots(cache, history)
     cache = [enrich(r) for r in cache]
 
     # URL ごとにまとめる（履歴のタイトル＋キャッシュの本文）
@@ -374,8 +462,10 @@ def main():
     out = {
         "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
         "keyword": keyword,
-        "count": len(items),
-        "items": items,
+        "lot_count": len(lot_data),
+        "lots": lot_data,
+        # 注文・出品・配送などの個人的な API は検索用データに含めない
+        "items": [i for i in items if not re.search(r"/(orders|seller|shipping|feedback|insurance|fees)/", i["url"])],
     }
     with open(os.path.join(args.out, "sold_data.json"), "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, indent=1)
@@ -397,6 +487,7 @@ def main():
         f"一番古いデータ: {oldest[:10]}",
         f"商品(ロット)ページ: {len(lots)} 件（うちキャッシュに本文あり {len(lots_with_body)} 件）",
         f"ロットの期間: {lot_dates[0] if lot_dates else '-'} 〜 {lot_dates[-1] if lot_dates else '-'}",
+        f"★ 検索用の商品データ: {len(lot_data)} 件（うち入札額あり {sum(1 for l in lot_data if l.get('final_bid'))} 件）",
         f"SOLD/終了 表記ありのページ: {sum(1 for i in items if i.get('sold'))}",
         f"キャッシュ走査ファイル数: {stats['files']}  解読不可: {stats['undecodable']}  (brotli 未導入で読めず: {stats['brotli_missing']})",
         "ドメイン別: " + ", ".join(f"{h}={n}" for h, n in hosts.most_common(10)),
