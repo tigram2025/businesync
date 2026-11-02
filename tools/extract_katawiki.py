@@ -75,6 +75,13 @@ def list_profiles():
     return profs
 
 
+def host_matches(url, keyword):
+    """広告トラッカー（linkedin, criteo 等の URL パラメータに含まれるだけのもの）を除外し、
+    ドメイン自体に keyword を含む URL だけを対象にする"""
+    m = re.match(r"^https?://([^/:?#]+)", url)
+    return bool(m and keyword in m.group(1).lower())
+
+
 # ---------------------------------------------------------------- 履歴
 def read_history(profile, keyword, since):
     src = os.path.join(CHROME_SUPPORT, profile, "History")
@@ -100,6 +107,8 @@ def read_history(profile, keyword, since):
             (f"%{keyword}%",),
         )
         for url, title, count, last, first in cur:
+            if not host_matches(url, keyword):
+                continue
             last_iso = chrome_time(last)
             if since and last_iso and last_iso < since:
                 continue
@@ -204,7 +213,7 @@ def read_cache(profile, keyword, rawdir):
             if not parsed:
                 continue
             url, headers, body = parsed
-            if keyword not in url.lower():
+            if not host_matches(url, keyword):
                 continue
             ctype = header_value(headers, "content-type").lower()
             if ctype.startswith("image/") or re.search(r"\.(jpe?g|png|gif|webp|svg|woff2?|ttf|css|js)(\?|$)", url, re.I):
@@ -375,6 +384,13 @@ def main():
     lots_with_body = [i for i in lots if i.get("raw_file")]
     lot_dates = sorted((i.get("first_visit") or i.get("cached_at") or "")[:10] for i in lots if i.get("first_visit") or i.get("cached_at"))
     hosts = Counter(re.sub(r"^https?://([^/]+).*", r"\1", i["url"]) for i in items)
+
+    def pattern(u):
+        u = re.sub(r"\?.*", "", u)
+        u = re.sub(r"/l/\d+[^/]*", "/l/<lot>", u)
+        return re.sub(r"\d{3,}", "<n>", u)
+
+    cache_patterns = Counter(pattern(i["url"]) for i in items if i.get("raw_file"))
     oldest = min((i.get("first_visit") or i.get("cached_at") or "" for i in items if i.get("first_visit") or i.get("cached_at")), default="-")
     summary = [
         f"合計 {len(items)} URL（履歴 {len(history)} / キャッシュ本文あり {len(cache)}）",
@@ -384,12 +400,16 @@ def main():
         f"SOLD/終了 表記ありのページ: {sum(1 for i in items if i.get('sold'))}",
         f"キャッシュ走査ファイル数: {stats['files']}  解読不可: {stats['undecodable']}  (brotli 未導入で読めず: {stats['brotli_missing']})",
         "ドメイン別: " + ", ".join(f"{h}={n}" for h, n in hosts.most_common(10)),
+        "",
+        "キャッシュに本文があった URL の種類（上位 25）:",
+    ] + [f"  {n:5d}  {pat}" for pat, n in cache_patterns.most_common(25)] + [
     ]
     with open(os.path.join(args.out, "summary.txt"), "w", encoding="utf-8") as f:
         f.write("\n".join(summary) + "\n")
     print("\n".join(summary))
+    print("（このまとめは summary.txt にも保存されています）")
     if stats["brotli_missing"]:
-        print("\n→ `pip3 install brotli` してから再実行すると、さらに読めるページが増えます。")
+        print("\n→ `python3 -m pip install --user brotli` してから再実行すると、さらに読めるページが増えます。")
     if lots:
         print("\n最近の商品ページ（例）:")
         for i in lots[:10]:
