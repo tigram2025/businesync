@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "Catawiki SOLD記録",
+  "version": "1.0.0",
+  "description": "Catawiki で見た商品の商品名・入札額を自動で記録し、あとで文章検索できるようにします（データはこのPCのChrome内だけに保存）",
+  "permissions": ["storage", "unlimitedStorage"],
+  "background": { "service_worker": "background.js" },
+  "action": { "default_title": "Catawiki SOLD検索を開く" },
+  "content_scripts": [
+    {
+      "matches": ["https://*.catawiki.com/*"],
+      "js": ["inject.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["https://*.catawiki.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_start"
+    }
+  ]
+}
