@@ -40,11 +40,19 @@
   /* ------------------------------------------------------------------ *
    * 状態
    * ------------------------------------------------------------------ */
+  // 標準構成: 正面(付属品) / 正面 / 背面 / 底面 / 角4 / 側面・持ち手4 / 内側ディテール4 / 内側 / 内側
+  const DEFAULT_PATTERN = '1,1,1,1,4,4,4,1,1';
+
   const state = {
-    singles: [], // そのまま使う写真 File[]
-    quads: [],   // 4分割にまとめる写真 File[]
-    built: [],   // 完成した出品用写真 File[]
+    photos: [], // 投入された写真（撮影順） File[]
+    built: [],  // 完成した出品用写真 File[]
   };
+
+  function parsePattern() {
+    return String($('pattern').value || DEFAULT_PATTERN)
+      .split(/[\s,、]+/).map((s) => parseInt(s, 10)).filter((n) => n === 1 || n === 4)
+      .slice(0, MAX_PHOTOS);
+  }
 
   /* ------------------------------------------------------------------ *
    * UI
@@ -89,24 +97,18 @@ label.sm{font-size:11px;color:#9090b0;display:block;margin:8px 0 3px}
   <h2>メルカリ自動出品アシスト</h2>
 
   <h3>① 写真（最大${MAX_PHOTOS}枚）</h3>
-  <div class="drop" id="dropS"><input type="file" accept="image/*" multiple id="inS">
-    <div class="t">📷 そのまま使う写真（正面・背面・側面など）</div>
-    <div class="s">ドロップ or タップ。ファイル名順に並びます</div></div>
-  <div class="thumbs" id="thS"></div>
-
-  <div class="drop" id="dropQ" style="margin-top:10px"><input type="file" accept="image/*" multiple id="inQ">
-    <div class="t">🔲 4分割にまとめる写真（角・付属品・ロゴなど）</div>
-    <div class="s">4枚ずつ 2×2 の1枚に自動合成</div></div>
-  <div class="thumbs" id="thQ"></div>
-
-  <div class="row">
-    <label style="font-size:11px;color:#9090b0">4分割の位置</label>
-    <select id="quadPos" style="width:auto">
-      <option value="end">最後にまとめる</option>
-      <option value="after1">1枚目の直後</option>
-    </select>
-    <button class="btn o" id="clearPh">写真クリア</button>
+  <label class="sm">構成（1＝そのまま / 4＝4枚を2×2に合成。撮影順に当てはめます）</label>
+  <div class="row" style="margin-top:0">
+    <input type="text" id="pattern" style="flex:1;font-family:monospace">
+    <button class="btn o" id="patReset" title="標準構成に戻す">標準</button>
   </div>
+  <div class="cnt" id="patInfo" style="text-align:left"></div>
+
+  <div class="drop" id="dropS" style="margin-top:8px"><input type="file" accept="image/*" multiple id="inS">
+    <div class="t">📷 写真をまとめてドロップ（撮影順）</div>
+    <div class="s">ファイル名順に並べて構成に当てはめます。◀▶で入れ替え</div></div>
+  <div class="thumbs" id="thS"></div>
+  <div class="row"><button class="btn o" id="clearPh">写真クリア</button></div>
   <h3>出品される写真（この順でアップロード）</h3>
   <div class="thumbs" id="thOut"></div>
   <div class="cnt" id="phCnt"></div>
@@ -144,19 +146,20 @@ label.sm{font-size:11px;color:#9090b0;display:block;margin:8px 0 3px}
   // 設定の読込
   $('key').value = store.get('openai_key', '');
   $('model').value = store.get('model', 'gpt-4o');
-  $('gap').value = store.get('gap', '6');
+  $('gap').value = store.get('gap', '0');
   $('footer').value = store.get('footer', DEFAULT_FOOTER);
-  $('quadPos').value = store.get('quadPos', 'end');
+  $('pattern').value = store.get('pattern', DEFAULT_PATTERN);
 
   $('save').onclick = () => {
     store.set('openai_key', $('key').value.trim());
     store.set('model', $('model').value.trim() || 'gpt-4o');
-    store.set('gap', $('gap').value.trim() || '6');
+    store.set('gap', $('gap').value.trim() || '0');
     store.set('footer', $('footer').value);
     log('設定を保存しました ✓');
     rebuild();
   };
-  $('quadPos').onchange = () => { store.set('quadPos', $('quadPos').value); rebuild(); };
+  $('pattern').addEventListener('change', () => { store.set('pattern', $('pattern').value); rebuild(); });
+  $('patReset').onclick = () => { $('pattern').value = DEFAULT_PATTERN; store.set('pattern', DEFAULT_PATTERN); rebuild(); };
 
   $('fab').onclick = () => $('panel').classList.toggle('on');
 
@@ -189,19 +192,26 @@ label.sm{font-size:11px;color:#9090b0;display:block;margin:8px 0 3px}
       state[key].push(...onlyImages(e.target.files)); e.target.value = ''; rebuild();
     });
   }
-  wireDrop('dropS', 'inS', 'singles');
-  wireDrop('dropQ', 'inQ', 'quads');
+  wireDrop('dropS', 'inS', 'photos');
 
-  $('clearPh').onclick = () => { state.singles = []; state.quads = []; rebuild(); };
+  $('clearPh').onclick = () => { state.photos = []; rebuild(); };
 
-  function renderThumbs(containerId, files, key) {
+  // 投入写真 i が出品写真の何枚目に入るか（null = 使われない）
+  function slotLabels() {
+    const labels = [];
+    parsePattern().forEach((n, slot) => { for (let k = 0; k < n; k++) labels.push(n === 4 ? `→${slot + 1}田` : `→${slot + 1}`); });
+    return labels;
+  }
+
+  function renderThumbs(containerId, files, key, labels) {
     const c = $(containerId);
     c.innerHTML = '';
     files.forEach((f, i) => {
       const el = document.createElement('div');
       el.className = 'th';
       const url = URL.createObjectURL(f);
-      el.innerHTML = `<img src="${url}"><span class="n">${i + 1}</span>` +
+      const tag = labels ? (labels[i] || '未使用') : String(i + 1);
+      el.innerHTML = `<img src="${url}"><span class="n"${labels && !labels[i] ? ' style="background:#f05a5a"' : ''}>${tag}</span>` +
         (key ? `<div class="ops"><button data-a="l">◀</button><button data-a="x">✕</button><button data-a="r">▶</button></div>` : '');
       if (key) {
         el.querySelectorAll('button').forEach((b) => b.onclick = () => {
@@ -218,16 +228,22 @@ label.sm{font-size:11px;color:#9090b0;display:block;margin:8px 0 3px}
 
   let buildSeq = 0;
   async function rebuild() {
-    renderThumbs('thS', state.singles, 'singles');
-    renderThumbs('thQ', state.quads, 'quads');
+    const pat = parsePattern();
+    const need = pat.reduce((a, b) => a + b, 0);
+    $('patInfo').textContent = `出品${pat.length}枚 ／ 必要な写真 ${need}枚（いま ${state.photos.length}枚）`;
+    $('patInfo').className = 'cnt' + (state.photos.length && state.photos.length !== need ? ' bad' : '');
+    renderThumbs('thS', state.photos, 'photos', slotLabels());
     const seq = ++buildSeq;
     const out = await buildPhotos();
     if (seq !== buildSeq) return;
     state.built = out.files;
     renderThumbs('thOut', out.files, null);
     const cnt = $('phCnt');
-    cnt.textContent = `${out.files.length}/${MAX_PHOTOS}枚` + (out.dropped ? `（上限超過で ${out.dropped} 枚省きました）` : '');
-    cnt.className = 'cnt' + (out.dropped ? ' bad' : '');
+    const msg = [];
+    if (out.unused) msg.push(`${out.unused}枚が余っています（構成に「1」を足すか✕で削除）`);
+    if (out.short) msg.push(`写真が${out.short}枚足りません`);
+    cnt.textContent = `${out.files.length}/${MAX_PHOTOS}枚` + (msg.length ? ' ⚠ ' + msg.join(' / ') : '');
+    cnt.className = 'cnt' + (msg.length ? ' bad' : '');
   }
 
   /* ------------------------------------------------------------------ *
@@ -276,29 +292,22 @@ label.sm{font-size:11px;color:#9090b0;display:block;margin:8px 0 3px}
     return canvasToFile(c, `collage_${String(idx).padStart(2, '0')}.jpg`);
   }
 
+  // 構成（例 1,1,1,1,4,4,4,1,1）に撮影順の写真を順番に当てはめる
   async function buildPhotos() {
-    // 4分割グループ（端数が1枚ならそのまま単体写真にする）
-    const groups = [];
-    for (let i = 0; i < state.quads.length; i += 4) groups.push(state.quads.slice(i, i + 4));
-    const quadFiles = [];
-    for (let g = 0; g < groups.length; g++) {
-      quadFiles.push(groups[g].length === 1 ? await normalize(groups[g][0], 90 + g) : await collage(groups[g], g + 1));
+    const pat = parsePattern();
+    const files = [];
+    let p = 0;
+    for (let slot = 0; slot < pat.length && p < state.photos.length; slot++) {
+      const group = state.photos.slice(p, p + pat[slot]);
+      p += group.length;
+      files.push(group.length === 1 ? await normalize(group[0], slot + 1) : await collage(group, slot + 1));
     }
-
-    // 上限10枚：4分割は優先して残し、溢れた分は単体写真の後ろから削る
-    const roomForSingles = Math.max(0, MAX_PHOTOS - quadFiles.length);
-    const singles = state.singles.slice(0, roomForSingles);
-    const dropped = (state.singles.length - singles.length) + Math.max(0, quadFiles.length - MAX_PHOTOS);
-    const singleFiles = [];
-    for (let i = 0; i < singles.length; i++) singleFiles.push(await normalize(singles[i], i + 1));
-
-    let files;
-    if ($('quadPos').value === 'after1' && singleFiles.length) {
-      files = [singleFiles[0], ...quadFiles, ...singleFiles.slice(1)];
-    } else {
-      files = [...singleFiles, ...quadFiles];
-    }
-    return { files: files.slice(0, MAX_PHOTOS), dropped };
+    const need = pat.reduce((a, b) => a + b, 0);
+    return {
+      files,
+      unused: Math.max(0, state.photos.length - need),
+      short: state.photos.length ? Math.max(0, need - state.photos.length) : 0,
+    };
   }
 
   /* ------------------------------------------------------------------ *
