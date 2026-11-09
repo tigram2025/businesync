@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>メルカリ自動出品アシスト</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Hiragino Sans','Noto Sans JP',sans-serif;background:#0f0f14;color:#e8e8f0;min-height:100vh;padding:20px 16px;line-height:1.7}
+main{max-width:720px;margin:0 auto}
+h1{font-size:18px;color:#22d3a0;margin-bottom:16px}
+h2{font-size:14px;color:#22d3a0;margin-bottom:8px}
+.card{background:#18181f;border:1px solid #28283a;border-radius:12px;padding:18px;margin-bottom:14px;font-size:13px}
+ol,ul{padding-left:20px}li{margin:4px 0}
+a{color:#22d3a0}
+.btn{display:inline-block;background:#22d3a0;color:#000;text-decoration:none;font-weight:700;padding:12px 20px;border-radius:8px;margin-top:8px}
+code{background:#111118;border:1px solid #28283a;border-radius:4px;padding:1px 5px;font-size:12px}
+.note{color:#9090b0;font-size:12px}
+</style>
+</head>
+<body>
+<main>
+<h1>🤖 メルカリ自動出品アシスト</h1>
+
+<div class="card">
+  <h2>できること</h2>
+  <ul>
+    <li>写真を最大10枚、メルカリの出品画面へ自動アップロード</li>
+    <li>角・付属品などの写真は4枚ずつ 2×2 の1枚に自動合成</li>
+    <li>写真とメモ（ブランド・管理番号・サイズ）から OpenAI がタイトルと説明文を作成</li>
+    <li>返品対応・購入元の定型文を説明文の末尾に自動で付ける</li>
+    <li>ChatGPT で作った文章（【タイトル】【商品説明】）をそのまま貼れば自動で振り分け</li>
+  </ul>
+  <p class="note" style="margin-top:8px">「出品する」ボタンは自動では押しません。カテゴリ・状態・配送・価格を確認してからご自身で押してください。</p>
+</div>
+
+<div class="card">
+  <h2>① インストール（初回だけ）</h2>
+  <ol>
+    <li>PCの Chrome / Edge に拡張機能 <b>Tampermonkey</b> を入れる<br>
+      <span class="note">（iPhone/iPad の Safari なら App Store の「Userscripts」アプリでも動きます）</span></li>
+    <li>下のボタンを押して「インストール」</li>
+  </ol>
+  <a class="btn" href="mercari-auto-listing.user.js">スクリプトをインストール</a>
+</div>
+
+<div class="card">
+  <h2>② 使い方</h2>
+  <ol>
+    <li>メルカリの <a href="https://jp.mercari.com/sell/create" target="_blank" rel="noopener">出品画面</a> を開くと、右下に「🤖 自動出品」ボタンが出ます</li>
+    <li>初回は ⚙️設定 に OpenAI APIキーを入れて保存</li>
+    <li><b>そのまま使う写真</b>（正面・背面・側面など）をドロップ</li>
+    <li><b>4分割にまとめる写真</b>（角4か所・付属品など）をドロップ → 4枚ずつ自動合成</li>
+    <li>メモ欄にいつも ChatGPT に送っている内容を入力<br>
+      <code>ロエベ クロコ / 管理番号 127-3 / 縦 19cm / 横 24.3cm / マチ 16cm / ハンドル 9.5cm</code></li>
+    <li>「✨ AI生成」→ 内容を確認・修正</li>
+    <li>「⬇️ メルカリの出品画面に入力」→ 残りの項目を設定して出品</li>
+  </ol>
+  <p class="note" style="margin-top:8px">写真は ◀ ▶ で並べ替え、✕ で削除できます。合計が10枚を超えた場合は、4分割を優先して残し、そのまま使う写真の後ろから省きます。</p>
+</div>
+
+<div class="card">
+  <h2>うまく入らないとき</h2>
+  <ul>
+    <li>メルカリの画面が変わると入力欄を見つけられないことがあります。パネルに「❌ ○○の欄が見つかりません」と表示されたら教えてください</li>
+    <li>APIキーはお使いのブラウザ内にだけ保存され、OpenAI 以外には送られません</li>
+  </ul>
+</div>
+</main>
+</body>
+</html>
