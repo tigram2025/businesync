@@ -2,100 +2,143 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>写真合成 — 4枚→1枚</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0f0f14">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>写真合成 — 最大6枚→1枚</title>
 <style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Hiragino Sans','Noto Sans JP',sans-serif;background:#0f0f14;color:#e8e8f0;min-height:100vh;padding:20px}
-h1{font-size:16px;font-weight:600;color:#22d3a0;margin-bottom:20px;letter-spacing:.5px}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{background:#0f0f14}
+body{font-family:'Hiragino Sans','Noto Sans JP',sans-serif;color:#e8e8f0;min-height:100vh;
+  padding:14px 14px calc(96px + env(safe-area-inset-bottom));max-width:640px;margin:0 auto}
+h1{font-size:16px;font-weight:600;color:#22d3a0;margin-bottom:12px;letter-spacing:.5px}
+.card{background:#18181f;border:1px solid #28283a;border-radius:14px;padding:14px;margin-bottom:12px}
+.sec-t{font-size:11px;color:#9090b0;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center}
 
-.card{background:#18181f;border:1px solid #28283a;border-radius:12px;padding:20px;margin-bottom:16px}
+/* Segmented buttons */
+.seg{display:flex;gap:6px;flex-wrap:wrap}
+.seg button{flex:1;min-width:44px;min-height:44px;background:#111118;border:1px solid #28283a;border-radius:10px;
+  color:#9090b0;font-size:15px;font-weight:600;cursor:pointer}
+.seg button.on{background:#22d3a0;border-color:#22d3a0;color:#000}
+
+/* Layout picker */
+#layouts{display:flex;gap:8px;overflow-x:auto;padding-bottom:2px}
+.lay{flex:0 0 auto;width:64px;padding:6px;background:#111118;border:2px solid #28283a;border-radius:10px;cursor:pointer}
+.lay.on{border-color:#22d3a0}
+.lay .mini{display:grid;gap:2px;aspect-ratio:1}
+.lay .mini i{background:#35354a;border-radius:2px}
+.lay.on .mini i{background:#22d3a0}
+.lay span{display:block;font-size:10px;color:#9090b0;text-align:center;margin-top:4px;white-space:nowrap}
 
 /* Bulk drop */
-#bulk-drop{border:2px dashed #35354a;border-radius:10px;padding:22px;text-align:center;cursor:pointer;position:relative;background:#111118;transition:all .2s;margin-bottom:14px}
-#bulk-drop.over{border-color:#22d3a0;background:rgba(34,211,160,.06)}
-#bulk-drop input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
-#bulk-drop .icon{font-size:28px;margin-bottom:6px}
+#bulk-drop{border:2px dashed #35354a;border-radius:12px;padding:16px;text-align:center;cursor:pointer;background:#111118;transition:all .2s;margin-bottom:12px}
+#bulk-drop.over,body.over #bulk-drop{border-color:#22d3a0;background:rgba(34,211,160,.08)}
 #bulk-drop .title{font-size:14px;color:#c0c0d8;font-weight:500}
 #bulk-drop .sub{font-size:11px;color:#55556a;margin-top:4px}
 
-/* 2x2 slots */
-#slots{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
-.slot{border:2px dashed #35354a;border-radius:8px;aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;position:relative;overflow:hidden;background:#111118;transition:border-color .15s}
-.slot.over{border-color:#22d3a0}
-.slot input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
-.slot img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none;pointer-events:none}
-.slot .lbl{pointer-events:none;text-align:center}
-.slot .lbl .plus{font-size:24px;color:#35354a}
-.slot .lbl .num{font-size:11px;color:#55556a;margin-top:4px}
-.slot .rm{display:none;position:absolute;top:5px;right:5px;background:rgba(0,0,0,.6);border:none;border-radius:50%;width:22px;height:22px;cursor:pointer;color:#fff;font-size:12px;z-index:2;line-height:22px;text-align:center}
-.slot .rm:hover{background:rgba(240,90,90,.8)}
+/* Board (= live preview) */
+#board{display:grid;width:100%;border-radius:8px;overflow:hidden;margin:0 auto;touch-action:manipulation}
+.slot{position:relative;overflow:hidden;background:#1d1d27;cursor:pointer;display:flex;align-items:center;justify-content:center;
+  outline:2px dashed #35354a;outline-offset:-2px;min-height:0;min-width:0}
+.slot.filled{outline:none;background:transparent}
+.slot.over{outline:3px solid #22d3a0}
+.slot.sel{outline:3px solid #f5c542;outline-offset:-3px}
+.slot.sel img{opacity:.75}
+.slot img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none;-webkit-user-drag:none;user-select:none}
+.slot .lbl{pointer-events:none;text-align:center;color:#55556a}
+.slot .lbl b{display:block;font-size:22px;color:#45455e;font-weight:400}
+.slot .lbl small{font-size:11px}
+.slot .no{position:absolute;left:5px;top:5px;background:rgba(0,0,0,.55);color:#fff;font-size:11px;border-radius:10px;padding:1px 7px;pointer-events:none}
+.slot .rm{position:absolute;top:4px;right:4px;background:rgba(0,0,0,.6);border:none;border-radius:50%;width:30px;height:30px;
+  cursor:pointer;color:#fff;font-size:14px;z-index:2}
+#hint{font-size:11px;color:#55556a;margin-top:8px;text-align:center;min-height:15px}
+#hint.sel{color:#f5c542}
 
 /* Controls */
-.controls{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:16px}
-.ctrl-item{display:flex;flex-direction:column;gap:4px}
-.ctrl-item label{font-size:11px;color:#9090b0}
-.ctrl-item input[type=range]{width:110px;accent-color:#22d3a0;vertical-align:middle}
-.ctrl-item select,.ctrl-item input[type=color]{background:#111118;border:1px solid #28283a;border-radius:6px;color:#e8e8f0;font-size:12px;padding:5px 8px;cursor:pointer}
-.ctrl-item input[type=color]{width:38px;height:30px;padding:2px 4px}
-.val{font-size:11px;color:#22d3a0;font-family:monospace;min-width:32px;display:inline-block}
+.controls{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.ctrl{display:flex;flex-direction:column;gap:6px}
+.ctrl.full{grid-column:1/-1}
+.ctrl label{font-size:11px;color:#9090b0;display:flex;justify-content:space-between}
+.ctrl input[type=range]{width:100%;accent-color:#22d3a0;height:28px}
+.ctrl select{background:#111118;border:1px solid #28283a;border-radius:8px;color:#e8e8f0;font-size:16px;padding:9px 8px;width:100%}
+.ctrl input[type=color]{width:100%;height:42px;background:#111118;border:1px solid #28283a;border-radius:8px;padding:3px}
+.val{color:#22d3a0;font-family:monospace}
 
-/* Buttons */
-.actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-.btn{padding:9px 18px;border-radius:8px;border:none;cursor:pointer;font-size:13px;font-weight:500;transition:all .15s}
-.btn-g{background:#22d3a0;color:#000}.btn-g:hover{background:#2fffc0}
-.btn-o{background:#202028;color:#9090b0;border:1px solid #28283a}.btn-o:hover{color:#e8e8f0}
-#status{font-size:12px;color:#55556a}
+/* Bottom action bar */
+#bar{position:fixed;left:0;right:0;bottom:0;background:rgba(15,15,20,.94);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  border-top:1px solid #28283a;padding:10px 14px calc(10px + env(safe-area-inset-bottom));z-index:10}
+#bar .in{max-width:640px;margin:0 auto;display:flex;gap:8px;align-items:center}
+.btn{min-height:48px;padding:0 14px;border-radius:12px;border:none;cursor:pointer;font-size:15px;font-weight:600}
+.btn-g{background:#22d3a0;color:#000;flex:1.4}
+.btn-p{background:#2a2a3a;color:#e8e8f0;flex:1}
+.btn-o{background:transparent;color:#9090b0;border:1px solid #28283a;flex:0 0 auto}
+.btn:disabled{opacity:.4}
+#status{font-size:12px;color:#22d3a0;font-family:monospace;min-width:34px;text-align:center}
 
-/* Preview */
-#preview-wrap{display:flex;justify-content:center;min-height:160px;align-items:center}
-#canvas{max-width:100%;border-radius:8px;display:none}
-#ph{color:#55556a;font-size:13px}
-
-/* Toast */
-#toast{position:fixed;bottom:24px;right:24px;background:#18181f;border:1px solid #22d3a0;color:#22d3a0;border-radius:8px;padding:10px 16px;font-size:13px;opacity:0;transition:opacity .3s;pointer-events:none}
+#toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom));background:#18181f;border:1px solid #22d3a0;color:#22d3a0;
+  border-radius:10px;padding:10px 16px;font-size:13px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:20;white-space:nowrap}
 #toast.on{opacity:1}
+#saver{position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:30;display:none;flex-direction:column;align-items:center;justify-content:center;
+  padding:20px 16px calc(20px + env(safe-area-inset-bottom))}
+#saver.on{display:flex}
+#saver p{color:#e8e8f0;font-size:14px;text-align:center;margin-bottom:12px;line-height:1.6}
+#saver p b{color:#22d3a0}
+#saver img{max-width:100%;max-height:70vh;border-radius:6px;-webkit-touch-callout:default;user-select:auto}
+#saver .btn{margin-top:14px;min-width:160px}
+@media (hover:hover){.seg button:hover,.lay:hover{border-color:#45455e}.btn-g:hover{background:#2fffc0}}
 </style>
 </head>
 <body>
 
-<h1>🖼️ 写真合成 — 4枚 → 1枚（2×2）</h1>
+<h1>🖼️ 写真合成 — 最大6枚 → 1枚</h1>
 
 <div class="card">
-  <!-- Bulk drop -->
+  <div class="sec-t">枚数</div>
+  <div class="seg" id="counts"></div>
+  <div class="sec-t" style="margin-top:12px">レイアウト</div>
+  <div id="layouts"></div>
+</div>
+
+<div class="card">
   <div id="bulk-drop">
-    <input type="file" accept="image/*" multiple onchange="bulkLoad(this.files)">
-    <div class="icon">📂</div>
-    <div class="title">ここに最大4枚まとめてドロップ</div>
-    <div class="sub">クリックしてファイル選択も可（複数選択OK）</div>
+    <div class="title">📂 まとめて選択 / ドロップ</div>
+    <div class="sub">複数枚を一度に選べます（空き枠に順番に入ります）</div>
   </div>
+  <div id="board"></div>
+  <div id="hint"></div>
+</div>
 
-  <!-- 2x2 slots -->
-  <div id="slots"></div>
-
-  <!-- Controls -->
+<div class="card">
   <div class="controls">
-    <div class="ctrl-item">
-      <label>余白</label>
-      <div>
-        <input type="range" id="gap" min="0" max="40" value="6" oninput="document.getElementById('gap-v').textContent=this.value+'px';preview()">
-        <span class="val" id="gap-v">6px</span>
-      </div>
+    <div class="ctrl full">
+      <label>余白 <span class="val" id="gap-v">6px</span></label>
+      <input type="range" id="gap" min="0" max="60" value="6">
     </div>
-    <div class="ctrl-item">
+    <div class="ctrl">
+      <label>縦横比</label>
+      <select id="ratio">
+        <option value="1">1:1 正方形</option>
+        <option value="0.8">4:5 縦</option>
+        <option value="0.75">3:4 縦</option>
+        <option value="0.5625">9:16 縦長</option>
+        <option value="1.3333">4:3 横</option>
+        <option value="1.7778">16:9 横長</option>
+      </select>
+    </div>
+    <div class="ctrl">
       <label>背景色</label>
-      <input type="color" id="bg" value="#ffffff" oninput="preview()">
+      <input type="color" id="bg" value="#ffffff">
     </div>
-    <div class="ctrl-item">
-      <label>出力サイズ</label>
-      <select id="size" onchange="preview()">
+    <div class="ctrl">
+      <label>出力サイズ（長辺）</label>
+      <select id="size">
         <option value="1600">1600px</option>
         <option value="2000" selected>2000px</option>
         <option value="2400">2400px</option>
         <option value="3000">3000px</option>
       </select>
     </div>
-    <div class="ctrl-item">
+    <div class="ctrl">
       <label>形式</label>
       <select id="fmt">
         <option value="jpeg">JPEG</option>
@@ -104,146 +147,359 @@ h1{font-size:16px;font-weight:600;color:#22d3a0;margin-bottom:20px;letter-spacin
       </select>
     </div>
   </div>
-
-  <div class="actions">
-    <button class="btn btn-g" onclick="download()">⬇️ ダウンロード</button>
-    <button class="btn btn-o" onclick="clearAll()">🗑️ クリア</button>
-    <span id="status"></span>
-  </div>
 </div>
 
-<div class="card">
-  <div style="font-size:12px;color:#9090b0;margin-bottom:12px">プレビュー</div>
-  <div id="preview-wrap">
-    <canvas id="canvas"></canvas>
-    <p id="ph">画像をアップロードするとプレビューが表示されます</p>
-  </div>
-</div>
+<div id="bar"><div class="in">
+  <button class="btn btn-o" id="btn-clear" aria-label="クリア">🗑️</button>
+  <button class="btn btn-p" id="btn-pick">📂 選択</button>
+  <span id="status">0/4</span>
+  <button class="btn btn-g" id="btn-save">⬇️ 保存</button>
+</div></div>
 
+<input type="file" id="file-in" accept="image/*" multiple hidden>
 <div id="toast"></div>
+<div id="saver">
+  <p>画像を<b>長押し</b> →「<b>写真に追加</b>」で<br>写真アプリに保存できます</p>
+  <img id="saver-img" alt="合成画像">
+  <button class="btn btn-o" id="saver-close">閉じる</button>
+</div>
 
 <script>
-const N = 4;
-let imgs = [null, null, null, null];
+// ---- Layout definitions: grid cols/rows + cells [col,row,colSpan,rowSpan] ----
+const LAYOUTS = {
+  2: [
+    { name:'横並び', cols:2, rows:1, cells:[[0,0,1,1],[1,0,1,1]] },
+    { name:'縦並び', cols:1, rows:2, cells:[[0,0,1,1],[0,1,1,1]] },
+  ],
+  3: [
+    { name:'横3', cols:3, rows:1, cells:[[0,0,1,1],[1,0,1,1],[2,0,1,1]] },
+    { name:'縦3', cols:1, rows:3, cells:[[0,0,1,1],[0,1,1,1],[0,2,1,1]] },
+    { name:'左大+2', cols:2, rows:2, cells:[[0,0,1,2],[1,0,1,1],[1,1,1,1]] },
+    { name:'上大+2', cols:2, rows:2, cells:[[0,0,2,1],[0,1,1,1],[1,1,1,1]] },
+  ],
+  4: [
+    { name:'2×2', cols:2, rows:2, cells:[[0,0,1,1],[1,0,1,1],[0,1,1,1],[1,1,1,1]] },
+    { name:'上大+3', cols:3, rows:3, cells:[[0,0,3,2],[0,2,1,1],[1,2,1,1],[2,2,1,1]] },
+    { name:'左大+3', cols:3, rows:3, cells:[[0,0,2,3],[2,0,1,1],[2,1,1,1],[2,2,1,1]] },
+    { name:'横4', cols:4, rows:1, cells:[[0,0,1,1],[1,0,1,1],[2,0,1,1],[3,0,1,1]] },
+  ],
+  5: [
+    { name:'上2下3', cols:6, rows:2, cells:[[0,0,3,1],[3,0,3,1],[0,1,2,1],[2,1,2,1],[4,1,2,1]] },
+    { name:'上3下2', cols:6, rows:2, cells:[[0,0,2,1],[2,0,2,1],[4,0,2,1],[0,1,3,1],[3,1,3,1]] },
+    { name:'上大+4', cols:4, rows:3, cells:[[0,0,4,2],[0,2,1,1],[1,2,1,1],[2,2,1,1],[3,2,1,1]] },
+    { name:'左大+4', cols:2, rows:4, cells:[[0,0,1,4],[1,0,1,1],[1,1,1,1],[1,2,1,1],[1,3,1,1]] },
+    { name:'中央大', cols:3, rows:3, cells:[[0,0,2,2],[2,0,1,1],[2,1,1,1],[0,2,1,1],[1,2,2,1]] },
+  ],
+  6: [
+    { name:'3×2', cols:3, rows:2, cells:[[0,0,1,1],[1,0,1,1],[2,0,1,1],[0,1,1,1],[1,1,1,1],[2,1,1,1]] },
+    { name:'2×3', cols:2, rows:3, cells:[[0,0,1,1],[1,0,1,1],[0,1,1,1],[1,1,1,1],[0,2,1,1],[1,2,1,1]] },
+    { name:'左上大+5', cols:3, rows:3, cells:[[0,0,2,2],[2,0,1,1],[2,1,1,1],[0,2,1,1],[1,2,1,1],[2,2,1,1]] },
+    { name:'上大+5', cols:5, rows:3, cells:[[0,0,5,2],[0,2,1,1],[1,2,1,1],[2,2,1,1],[3,2,1,1],[4,2,1,1]] },
+  ],
+};
+const MAX = 6;
+let count = 4, layoutIdx = 0;
+let imgs = Array(MAX).fill(null);   // {img, url}
+let selected = -1;                  // tap-to-swap selection
+let pickTarget = -1;                // slot index for single-slot picker, -1 = fill empties
 
-// Build slots
-const slotsEl = document.getElementById('slots');
-for (let i = 0; i < N; i++) {
-  const s = document.createElement('div');
-  s.className = 'slot'; s.id = `s${i}`;
-  s.innerHTML = `
-    <input type="file" accept="image/*" onchange="slotLoad(${i},this)">
-    <img id="th${i}">
-    <div class="lbl"><div class="plus">＋</div><div class="num">写真 ${i+1}</div></div>
-    <button class="rm" id="rm${i}" onclick="remove(${i},event)">✕</button>
-  `;
-  s.addEventListener('dragover', e => { e.preventDefault(); s.classList.add('over'); });
-  s.addEventListener('dragleave', () => s.classList.remove('over'));
-  s.addEventListener('drop', e => { e.preventDefault(); s.classList.remove('over'); const f = e.dataTransfer.files[0]; if (f && f.type.startsWith('image/')) loadBlob(i, f); });
-  slotsEl.appendChild(s);
+const $ = id => document.getElementById(id);
+const fileIn = $('file-in');
+const layout = () => LAYOUTS[count][layoutIdx];
+
+// ---- Count & layout pickers ----
+function renderCounts() {
+  $('counts').innerHTML = '';
+  for (let n = 2; n <= MAX; n++) {
+    const b = document.createElement('button');
+    b.textContent = n + '枚';
+    if (n === count) b.className = 'on';
+    b.onclick = () => setCount(n);
+    $('counts').appendChild(b);
+  }
+}
+function renderLayouts() {
+  const wrap = $('layouts'); wrap.innerHTML = '';
+  LAYOUTS[count].forEach((L, i) => {
+    const d = document.createElement('div');
+    d.className = 'lay' + (i === layoutIdx ? ' on' : '');
+    const m = document.createElement('div');
+    m.className = 'mini';
+    m.style.gridTemplateColumns = `repeat(${L.cols},1fr)`;
+    m.style.gridTemplateRows = `repeat(${L.rows},1fr)`;
+    L.cells.forEach(([c, r, w, h]) => {
+      const it = document.createElement('i');
+      it.style.gridArea = `${r+1} / ${c+1} / span ${h} / span ${w}`;
+      m.appendChild(it);
+    });
+    d.appendChild(m);
+    d.insertAdjacentHTML('beforeend', `<span>${L.name}</span>`);
+    d.onclick = () => { layoutIdx = i; renderLayouts(); renderBoard(); };
+    wrap.appendChild(d);
+  });
+}
+function setCount(n) {
+  if (n < count && imgs.slice(n).some(Boolean)) {
+    // keep photos: compact them forward so nothing is silently lost if possible
+    compact();
+    if (imgs.slice(n).some(Boolean)) toast(`${n+1}枚目以降は非表示になります`);
+  }
+  count = n; layoutIdx = 0; selected = -1;
+  renderCounts(); renderLayouts(); renderBoard();
+}
+function compact() {
+  const list = imgs.filter(Boolean);
+  imgs = [...list, ...Array(MAX - list.length).fill(null)];
 }
 
-// Bulk drop
-const bulk = document.getElementById('bulk-drop');
-bulk.addEventListener('dragover', e => { e.preventDefault(); bulk.classList.add('over'); });
-bulk.addEventListener('dragleave', () => bulk.classList.remove('over'));
-bulk.addEventListener('drop', e => { e.preventDefault(); bulk.classList.remove('over'); bulkLoad(e.dataTransfer.files); });
+// ---- Board ----
+function renderBoard() {
+  const L = layout(), board = $('board');
+  const ratio = parseFloat($('ratio').value);
+  const gap = parseInt($('gap').value);
+  const size = parseInt($('size').value);
+  board.style.gridTemplateColumns = `repeat(${L.cols},1fr)`;
+  board.style.gridTemplateRows = `repeat(${L.rows},1fr)`;
+  board.style.aspectRatio = ratio;
+  // fit tall ratios on phone screens
+  board.style.maxWidth = ratio < 1 ? `min(100%, ${Math.round(58 * ratio)}vh)` : '100%';
+  board.style.background = $('bg').value;
+  const w = board.clientWidth || 600;
+  const long = ratio >= 1 ? w : w / ratio;
+  const g = Math.round(gap * long / size);
+  board.style.gap = g + 'px';
+  board.style.padding = g + 'px';
+  board.innerHTML = '';
 
-function bulkLoad(files) {
-  const list = Array.from(files).filter(f => f.type.startsWith('image/')).slice(0, N);
-  let slot = 0;
-  list.forEach(f => {
-    while (slot < N && imgs[slot]) slot++;
-    if (slot >= N) slot = 0;
-    loadBlob(slot++, f);
+  L.cells.forEach(([c, r, cw, rh], i) => {
+    const s = document.createElement('div');
+    const it = imgs[i];
+    s.className = 'slot' + (it ? ' filled' : '') + (i === selected ? ' sel' : '');
+    s.style.gridArea = `${r+1} / ${c+1} / span ${rh} / span ${cw}`;
+    s.dataset.i = i;
+    if (it) {
+      s.innerHTML = `<img src="${it.url}" alt=""><span class="no">${i+1}</span><button class="rm" aria-label="削除">✕</button>`;
+      s.querySelector('.rm').onclick = e => { e.stopPropagation(); removeAt(i); };
+      s.draggable = true;
+      s.addEventListener('dragstart', e => { e.dataTransfer.setData('text/slot', i); e.dataTransfer.effectAllowed = 'move'; });
+    } else {
+      s.innerHTML = `<div class="lbl"><b>＋</b><small>写真 ${i+1}</small></div>`;
+    }
+    s.onclick = () => onSlotTap(i);
+    s.addEventListener('dragover', e => { e.preventDefault(); e.stopPropagation(); s.classList.add('over'); });
+    s.addEventListener('dragleave', () => s.classList.remove('over'));
+    s.addEventListener('drop', e => {
+      e.preventDefault(); e.stopPropagation(); s.classList.remove('over'); document.body.classList.remove('over');
+      const from = e.dataTransfer.getData('text/slot');
+      if (from !== '') { swap(+from, i); return; }
+      addFiles(e.dataTransfer.files, i);
+    });
+    board.appendChild(s);
+  });
+  updateStatus();
+  scheduleBuild();
+}
+
+function onSlotTap(i) {
+  if (selected >= 0) {
+    if (selected !== i) swap(selected, i);
+    selected = -1; renderBoard(); return;
+  }
+  if (imgs[i]) { selected = i; renderBoard(); return; }
+  pickTarget = i; fileIn.click();
+}
+function swap(a, b) {
+  [imgs[a], imgs[b]] = [imgs[b], imgs[a]];
+  selected = -1; renderBoard();
+}
+function removeAt(i) {
+  if (imgs[i]) URL.revokeObjectURL(imgs[i].url);
+  imgs[i] = null; selected = -1; renderBoard();
+}
+function updateStatus() {
+  const n = imgs.slice(0, count).filter(Boolean).length;
+  $('status').textContent = `${n}/${count}`;
+  const h = $('hint');
+  if (selected >= 0) { h.textContent = `写真${selected+1}を選択中 → 入れ替え先をタップ（同じ写真で解除）`; h.className = 'sel'; }
+  else { h.textContent = n ? '写真をタップ → 別の枠をタップで入れ替え' : '空き枠をタップして1枚ずつ追加もできます'; h.className = ''; }
+}
+
+// ---- Loading ----
+function loadImage(file) {
+  return new Promise(res => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => res({ img, url });
+    img.onerror = () => { URL.revokeObjectURL(url); res(null); };
+    img.src = url;
   });
 }
 
-function slotLoad(i, inp) { if (inp.files[0]) loadBlob(i, inp.files[0]); }
+// start = slot to begin at (-1 = fill empty slots in order)
+async function addFiles(fileList, start = -1) {
+  const files = Array.from(fileList || []).filter(f => f.type.startsWith('image/') || /\.(heic|heif|jpe?g|png|webp|gif)$/i.test(f.name));
+  if (!files.length) return;
 
-function loadBlob(i, file) {
-  const url = URL.createObjectURL(file);
-  const img = new Image();
-  img.onload = () => {
-    imgs[i] = img;
-    document.getElementById(`th${i}`).src = url;
-    document.getElementById(`th${i}`).style.display = 'block';
-    document.getElementById(`s${i}`).querySelector('.lbl').style.display = 'none';
-    document.getElementById(`rm${i}`).style.display = 'block';
-    preview();
-  };
-  img.src = url;
+  let targets;
+  if (start >= 0) {
+    // from this slot onward (overwrite), then wrap into remaining empties
+    targets = [];
+    for (let i = start; i < count && targets.length < files.length; i++) targets.push(i);
+    for (let i = 0; i < count && targets.length < files.length; i++) if (!targets.includes(i) && !imgs[i]) targets.push(i);
+  } else {
+    // grow the photo count automatically if more photos are added
+    const filled = imgs.slice(0, count).filter(Boolean).length;
+    const need = Math.min(MAX, filled + files.length);
+    if (need > count) { compact(); count = need; layoutIdx = 0; renderCounts(); renderLayouts(); }
+    targets = [];
+    for (let i = 0; i < count; i++) if (!imgs[i]) targets.push(i);
+  }
+  const use = files.slice(0, targets.length);
+  if (files.length > use.length) toast(`最大${MAX}枚までです（${files.length - use.length}枚はスキップ）`);
+
+  $('status').textContent = '…';
+  const loaded = await Promise.all(use.map(loadImage));
+  let fail = 0;
+  loaded.forEach((it, k) => {
+    if (!it) { fail++; return; }
+    const i = targets[k];
+    if (imgs[i]) URL.revokeObjectURL(imgs[i].url);
+    imgs[i] = it;
+  });
+  if (fail) toast(`${fail}枚読み込めませんでした`);
+  selected = -1; renderBoard();
 }
 
-function remove(i, e) {
-  e.stopPropagation();
-  imgs[i] = null;
-  const th = document.getElementById(`th${i}`);
-  th.src = ''; th.style.display = 'none';
-  document.getElementById(`s${i}`).querySelector('.lbl').style.display = 'flex';
-  document.getElementById(`rm${i}`).style.display = 'none';
-  preview();
-}
+fileIn.addEventListener('change', () => { addFiles(fileIn.files, pickTarget); pickTarget = -1; fileIn.value = ''; });
+$('bulk-drop').onclick = () => { pickTarget = -1; fileIn.click(); };
+$('btn-pick').onclick = () => { pickTarget = -1; fileIn.click(); };
 
-function clearAll() {
-  for (let i = 0; i < N; i++) remove(i, { stopPropagation: () => {} });
-  document.getElementById('canvas').style.display = 'none';
-  document.getElementById('ph').style.display = 'block';
-  document.getElementById('status').textContent = '';
-}
+// Whole-page drag & drop
+let dragDepth = 0;
+const isFileDrag = e => Array.from(e.dataTransfer?.types || []).includes('Files');
+window.addEventListener('dragenter', e => { if (isFileDrag(e)) { dragDepth++; document.body.classList.add('over'); } });
+window.addEventListener('dragleave', e => { if (isFileDrag(e) && --dragDepth <= 0) { dragDepth = 0; document.body.classList.remove('over'); } });
+window.addEventListener('dragover', e => e.preventDefault());
+window.addEventListener('drop', e => {
+  e.preventDefault(); dragDepth = 0; document.body.classList.remove('over');
+  if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files);
+});
 
-function buildCanvas(size, gap, bg) {
+// ---- Controls ----
+$('gap').addEventListener('input', () => { $('gap-v').textContent = $('gap').value + 'px'; renderBoard(); });
+$('fmt').addEventListener('input', scheduleBuild);
+['ratio', 'bg', 'size'].forEach(id => $(id).addEventListener('input', renderBoard));
+window.addEventListener('resize', renderBoard);
+
+$('btn-clear').onclick = () => {
+  if (!imgs.some(Boolean)) return;
+  if (!confirm('すべての写真をクリアしますか？')) return;
+  imgs.forEach(it => it && URL.revokeObjectURL(it.url));
+  imgs = Array(MAX).fill(null); selected = -1; renderBoard();
+};
+
+// ---- Output ----
+function buildCanvas() {
+  const L = layout();
+  const ratio = parseFloat($('ratio').value);
+  const long = parseInt($('size').value);
+  const gap = parseInt($('gap').value);
+  const W = Math.round(ratio >= 1 ? long : long * ratio);
+  const H = Math.round(ratio >= 1 ? long / ratio : long);
   const c = document.createElement('canvas');
-  c.width = c.height = size;
+  c.width = W; c.height = H;
   const ctx = c.getContext('2d');
-  ctx.fillStyle = bg; ctx.fillRect(0, 0, size, size);
-  const cell = (size - gap * 3) / 2;
-  [[gap,gap],[gap*2+cell,gap],[gap,gap*2+cell],[gap*2+cell,gap*2+cell]].forEach(([x,y], i) => {
-    if (!imgs[i]) return;
-    const img = imgs[i];
-    const s = Math.min(img.width, img.height);
-    ctx.drawImage(img, (img.width-s)/2, (img.height-s)/2, s, s, x, y, cell, cell);
+  ctx.fillStyle = $('bg').value; ctx.fillRect(0, 0, W, H);
+  ctx.imageSmoothingQuality = 'high';
+  const uw = (W - gap * (L.cols + 1)) / L.cols;
+  const uh = (H - gap * (L.rows + 1)) / L.rows;
+  L.cells.forEach(([col, row, cw, rh], i) => {
+    const it = imgs[i]; if (!it) return;
+    const x = gap + col * (uw + gap), y = gap + row * (uh + gap);
+    const w = cw * uw + (cw - 1) * gap, h = rh * uh + (rh - 1) * gap;
+    const img = it.img, iw = img.naturalWidth, ih = img.naturalHeight;
+    // center-crop (cover)
+    const scale = Math.max(w / iw, h / ih);
+    const sw = w / scale, sh = h / scale;
+    ctx.drawImage(img, (iw - sw) / 2, (ih - sh) / 2, sw, sh, x, y, w, h);
   });
   return c;
 }
 
-function preview() {
-  const loaded = imgs.filter(Boolean).length;
-  document.getElementById('status').textContent = `${loaded}/4 枚`;
-  const ph = document.getElementById('ph');
-  const cv = document.getElementById('canvas');
-  if (!loaded) { cv.style.display = 'none'; ph.style.display = 'block'; return; }
-  const gap = parseInt(document.getElementById('gap').value);
-  const bg  = document.getElementById('bg').value;
-  const out = parseInt(document.getElementById('size').value);
-  const previewGap = Math.round(gap * 600 / out);
-  const src = buildCanvas(600, previewGap, bg);
-  cv.width = src.width; cv.height = src.height;
-  cv.getContext('2d').drawImage(src, 0, 0);
-  cv.style.display = 'block'; ph.style.display = 'none';
+// Pre-build the output so the share sheet can open immediately on tap.
+// (iPhone Safari blocks navigator.share if too much time passes after the tap.)
+let built = null, buildTimer = null, buildSeq = 0;
+function outputKey() {
+  return JSON.stringify([count, layoutIdx, $('ratio').value, $('bg').value, $('size').value, $('gap').value, $('fmt').value,
+    imgs.slice(0, count).map(it => it ? it.url : '')]);
 }
-
-function download() {
-  if (!imgs.filter(Boolean).length) { toast('画像を1枚以上アップロードしてください'); return; }
-  const gap  = parseInt(document.getElementById('gap').value);
-  const bg   = document.getElementById('bg').value;
-  const size = parseInt(document.getElementById('size').value);
-  const fmt  = document.getElementById('fmt').value;
+function makeOutput() {
+  const key = outputKey(), seq = ++buildSeq;
+  const fmt = $('fmt').value;
   const mime = { jpeg:'image/jpeg', png:'image/png', webp:'image/webp' }[fmt];
-  buildCanvas(size, gap, bg).toBlob(blob => {
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `combined_${Date.now()}.${fmt}`;
-    a.click();
-    toast('ダウンロード開始しました ✓');
-  }, mime, fmt === 'png' ? undefined : 0.92);
+  return new Promise(res => buildCanvas().toBlob(blob => {
+    if (!blob) return res(null);
+    const out = { key, blob, file: new File([blob], `combined_${Date.now()}.${fmt}`, { type: mime }) };
+    if (seq === buildSeq) built = out;
+    res(out);
+  }, mime, fmt === 'png' ? undefined : 0.92));
+}
+function scheduleBuild() {
+  built = null; clearTimeout(buildTimer);
+  if (!imgs.slice(0, count).some(Boolean)) return;
+  buildTimer = setTimeout(makeOutput, 300);
 }
 
-function toast(msg) {
-  const t = document.getElementById('toast');
-  t.textContent = msg; t.classList.add('on');
-  setTimeout(() => t.classList.remove('on'), 3000);
+const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const isMobile = isIOS || matchMedia('(pointer:coarse)').matches;
+
+function showSaver(blob) {
+  const img = $('saver-img');
+  if (img.src) URL.revokeObjectURL(img.src);
+  img.src = URL.createObjectURL(blob);
+  $('saver').classList.add('on');
 }
+$('saver-close').onclick = () => $('saver').classList.remove('on');
+
+$('btn-save').onclick = async () => {
+  if (!imgs.slice(0, count).some(Boolean)) { toast('写真を1枚以上追加してください'); return; }
+  let out = built && built.key === outputKey() ? built : null;
+  const ready = !!out;
+  if (!out) {
+    const btn = $('btn-save'); btn.disabled = true;
+    out = await makeOutput();
+    btn.disabled = false;
+    if (!out) { toast('画像の作成に失敗しました'); return; }
+  }
+
+  if (isMobile) {
+    // Share sheet → 「画像を保存」 puts it straight into the Photos app
+    if (navigator.canShare && navigator.canShare({ files: [out.file] })) {
+      try { await navigator.share({ files: [out.file] }); return; }
+      catch (e) { if (e.name === 'AbortError') return; }
+    }
+    // Fallback: show image, long-press → 「写真に追加」
+    showSaver(out.blob);
+    if (!ready) toast('長押しで写真に保存できます');
+    return;
+  }
+
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(out.blob);
+  a.download = out.file.name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+  toast('ダウンロード開始しました ✓');
+};
+
+let toastT;
+function toast(msg) {
+  const t = $('toast');
+  t.textContent = msg; t.classList.add('on');
+  clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('on'), 2800);
+}
+
+renderCounts(); renderLayouts(); renderBoard();
 </script>
 </body>
 </html>
