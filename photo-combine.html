@@ -78,6 +78,13 @@ h1{font-size:16px;font-weight:600;color:#22d3a0;margin-bottom:12px;letter-spacin
 #toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom));background:#18181f;border:1px solid #22d3a0;color:#22d3a0;
   border-radius:10px;padding:10px 16px;font-size:13px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:20;white-space:nowrap}
 #toast.on{opacity:1}
+#saver{position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:30;display:none;flex-direction:column;align-items:center;justify-content:center;
+  padding:20px 16px calc(20px + env(safe-area-inset-bottom))}
+#saver.on{display:flex}
+#saver p{color:#e8e8f0;font-size:14px;text-align:center;margin-bottom:12px;line-height:1.6}
+#saver p b{color:#22d3a0}
+#saver img{max-width:100%;max-height:70vh;border-radius:6px;-webkit-touch-callout:default;user-select:auto}
+#saver .btn{margin-top:14px;min-width:160px}
 @media (hover:hover){.seg button:hover,.lay:hover{border-color:#45455e}.btn-g:hover{background:#2fffc0}}
 </style>
 </head>
@@ -151,6 +158,11 @@ h1{font-size:16px;font-weight:600;color:#22d3a0;margin-bottom:12px;letter-spacin
 
 <input type="file" id="file-in" accept="image/*" multiple hidden>
 <div id="toast"></div>
+<div id="saver">
+  <p>画像を<b>長押し</b> →「<b>写真に追加</b>」で<br>写真アプリに保存できます</p>
+  <img id="saver-img" alt="合成画像">
+  <button class="btn btn-o" id="saver-close">閉じる</button>
+</div>
 
 <script>
 // ---- Layout definitions: grid cols/rows + cells [col,row,colSpan,rowSpan] ----
@@ -285,6 +297,7 @@ function renderBoard() {
     board.appendChild(s);
   });
   updateStatus();
+  scheduleBuild();
 }
 
 function onSlotTap(i) {
@@ -374,6 +387,7 @@ window.addEventListener('drop', e => {
 
 // ---- Controls ----
 $('gap').addEventListener('input', () => { $('gap-v').textContent = $('gap').value + 'px'; renderBoard(); });
+$('fmt').addEventListener('input', scheduleBuild);
 ['ratio', 'bg', 'size'].forEach(id => $(id).addEventListener('input', renderBoard));
 window.addEventListener('resize', renderBoard);
 
@@ -412,26 +426,67 @@ function buildCanvas() {
   return c;
 }
 
-$('btn-save').onclick = async () => {
-  if (!imgs.slice(0, count).some(Boolean)) { toast('写真を1枚以上追加してください'); return; }
+// Pre-build the output so the share sheet can open immediately on tap.
+// (iPhone Safari blocks navigator.share if too much time passes after the tap.)
+let built = null, buildTimer = null, buildSeq = 0;
+function outputKey() {
+  return JSON.stringify([count, layoutIdx, $('ratio').value, $('bg').value, $('size').value, $('gap').value, $('fmt').value,
+    imgs.slice(0, count).map(it => it ? it.url : '')]);
+}
+function makeOutput() {
+  const key = outputKey(), seq = ++buildSeq;
   const fmt = $('fmt').value;
   const mime = { jpeg:'image/jpeg', png:'image/png', webp:'image/webp' }[fmt];
-  const btn = $('btn-save'); btn.disabled = true;
-  const blob = await new Promise(r => buildCanvas().toBlob(r, mime, fmt === 'png' ? undefined : 0.92));
-  btn.disabled = false;
-  if (!blob) { toast('画像の作成に失敗しました'); return; }
-  const name = `combined_${Date.now()}.${fmt}`;
-  const file = new File([blob], name, { type: mime });
+  return new Promise(res => buildCanvas().toBlob(blob => {
+    if (!blob) return res(null);
+    const out = { key, blob, file: new File([blob], `combined_${Date.now()}.${fmt}`, { type: mime }) };
+    if (seq === buildSeq) built = out;
+    res(out);
+  }, mime, fmt === 'png' ? undefined : 0.92));
+}
+function scheduleBuild() {
+  built = null; clearTimeout(buildTimer);
+  if (!imgs.slice(0, count).some(Boolean)) return;
+  buildTimer = setTimeout(makeOutput, 300);
+}
 
-  // Smartphones: share sheet lets you "画像を保存" to the photo library
-  const mobile = matchMedia('(pointer:coarse)').matches;
-  if (mobile && navigator.canShare && navigator.canShare({ files: [file] })) {
-    try { await navigator.share({ files: [file] }); return; }
-    catch (e) { if (e.name === 'AbortError') return; }
+const isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const isMobile = isIOS || matchMedia('(pointer:coarse)').matches;
+
+function showSaver(blob) {
+  const img = $('saver-img');
+  if (img.src) URL.revokeObjectURL(img.src);
+  img.src = URL.createObjectURL(blob);
+  $('saver').classList.add('on');
+}
+$('saver-close').onclick = () => $('saver').classList.remove('on');
+
+$('btn-save').onclick = async () => {
+  if (!imgs.slice(0, count).some(Boolean)) { toast('写真を1枚以上追加してください'); return; }
+  let out = built && built.key === outputKey() ? built : null;
+  const ready = !!out;
+  if (!out) {
+    const btn = $('btn-save'); btn.disabled = true;
+    out = await makeOutput();
+    btn.disabled = false;
+    if (!out) { toast('画像の作成に失敗しました'); return; }
   }
+
+  if (isMobile) {
+    // Share sheet → 「画像を保存」 puts it straight into the Photos app
+    if (navigator.canShare && navigator.canShare({ files: [out.file] })) {
+      try { await navigator.share({ files: [out.file] }); return; }
+      catch (e) { if (e.name === 'AbortError') return; }
+    }
+    // Fallback: show image, long-press → 「写真に追加」
+    showSaver(out.blob);
+    if (!ready) toast('長押しで写真に保存できます');
+    return;
+  }
+
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = name;
+  a.href = URL.createObjectURL(out.blob);
+  a.download = out.file.name;
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 10000);
   toast('ダウンロード開始しました ✓');
